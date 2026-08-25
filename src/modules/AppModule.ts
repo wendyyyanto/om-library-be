@@ -6,6 +6,7 @@ import { createValidationPipe } from "../commons/ValidationPipe";
 import { AppController } from "../controllers/AppController";
 import { AuthModule } from "./AuthModule";
 import { DatabaseModule } from "./DatabaseModule";
+import { FilesModule } from "./FilesModule";
 import { ProfileModule } from "./ProfileModule";
 
 @Module({
@@ -14,6 +15,7 @@ import { ProfileModule } from "./ProfileModule";
 		DiscoveryModule,
 		DatabaseModule,
 		AuthModule,
+		FilesModule,
 		ProfileModule
 	],
 	controllers: [AppController],

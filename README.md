@@ -19,12 +19,13 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 
 | Method | Route | Auth | Notes |
 |---|---|---|---|
-| `GET` | `/` | public | Health probe. |
-| `POST` | `/auth/register` | public | Self-signup. `role` is hardcoded to `member`. |
-| `POST` | `/auth/login` | public | bcrypt password, returns `{ user, accessToken }`. |
-| `POST` | `/auth/logout` | bearer | `204`, no body. Revokes by cutoff — see below. |
-| `GET` | `/profile` | bearer | The caller's own account. |
-| `PATCH` | `/profile` | bearer | `name` for anyone; `role`/`status` admin-only. |
+| `GET` | `/v1` | public | Health probe. |
+| `POST` | `/v1/auth/register` | public | Self-signup. `role` is hardcoded to `member`. |
+| `POST` | `/v1/auth/login` | public | bcrypt password, returns `{ user, accessToken }`. |
+| `POST` | `/v1/auth/logout` | bearer | `204`, no body. Revokes by cutoff — see below. |
+| `GET` | `/v1/profile` | bearer | The caller's own account. |
+| `PATCH` | `/v1/profile` | bearer | `name` for anyone; `role`/`status` admin-only. |
+| `POST` | `/v1/files` | bearer | Upload one `multipart/form-data` field named `file` to R2. |
 
 ## Environment
 
@@ -35,6 +36,45 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `JWT_SECRET` | **yes** | none — the app refuses to start without it |
 | `JWT_EXPIRES_IN` | no | `7d` |
 | `BCRYPT_COST` | no | `12` |
+| `R2_ACCOUNT_ID` | **yes** | — |
+| `R2_ACCESS_KEY_ID` | **yes** | — |
+| `R2_SECRET_ACCESS_KEY` | **yes** | — |
+| `R2_BUCKET_NAME` | **yes** | — |
+| `FILE_UPLOAD_MAX_BYTES` | no | `10485760` (10 MiB) |
+
+The R2 credentials use an R2 API token's S3 access key id and secret access key, not a
+general Cloudflare REST API bearer token. The app refuses to start if the required R2
+configuration is incomplete.
+
+## File uploads
+
+`POST /v1/files` accepts exactly one in-memory multipart file in the `file` field. The
+default 10 MiB limit is deliberately lower than R2's object limit because the API buffers
+the upload before sending it to R2. Raise `FILE_UPLOAD_MAX_BYTES` only with the process's
+available memory and expected concurrency in mind; large or resumable uploads should use
+presigned or multipart uploads instead.
+
+```bash
+curl -X POST http://localhost:3000/v1/files \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -F "file=@./cover.jpg"
+```
+
+The response contains the private R2 object key and upload metadata:
+
+```json
+{
+  "key": "files/USER_ID/RANDOM_UUID.jpg",
+  "etag": "OBJECT_ETAG",
+  "size": 123456,
+  "contentType": "image/jpeg",
+  "originalName": "cover.jpg"
+}
+```
+
+The service generates the object key; client filenames are never used as R2 paths. Objects
+remain private unless access is added separately through a signed download URL or another
+deliberate serving route.
 
 ## Database
 
@@ -62,11 +102,11 @@ ids (`member`=1, `admin`=2; `active`=1, `inactive`=2). Rows must be seeded to ma
 
 `AuthModule` registers `JwtAuthGuard` as a global `APP_GUARD`, so **every route requires a
 bearer token** unless it carries `@Public()`. Exactly three handlers are public, listed in
-`ALLOWED_PUBLIC_ROUTES` in `commons/PublicRouteAudit.ts`: `GET /` (probes cannot send a
-token), `POST /auth/login` (locking it makes the API unreachable), and `POST /auth/register`
-(self-signup). `assertNoUnexpectedPublicRoutes()` runs at bootstrap and **refuses to start**
-if any other route carries `@Public()` — so opening an endpoint is a deliberate, reviewable
-edit to that allowlist rather than a one-line decorator.
+`ALLOWED_PUBLIC_ROUTES` in `commons/PublicRouteAudit.ts`: `GET /v1` (probes cannot send a
+token), `POST /v1/auth/login` (locking it makes the API unreachable), and `POST
+/v1/auth/register` (self-signup). `assertNoUnexpectedPublicRoutes()` runs at bootstrap and
+**refuses to start** if any other route carries `@Public()` — so opening an endpoint is a
+deliberate, reviewable edit to that allowlist rather than a one-line decorator.
 
 `RolesGuard` is applied per controller with `@UseGuards(RolesGuard)` + `@Roles(...)`, not
 globally. `CurrentUser()` is the only sanctioned source of the caller's identity.
@@ -119,7 +159,7 @@ Failures use the same `{ statusCode, code, message }` envelope with an added `er
 `constants/library.ts` already defines `LendingStatus`, `CopyStatus`, `DamageClaimStatus` and
 the member tab filters, mirroring `library_lending`, `library_book_copies` and
 `library_damage_claims`. There are **no entities, services or controllers for those tables
-yet** — the constants are ahead of the endpoints. `GET /lendings/me?tab=active|history` is
+yet** — the constants are ahead of the endpoints. `GET /v1/lendings/me?tab=active|history` is
 referenced in those comments but does not exist.
 
 `TransactionRunner` is wired into `DatabaseModule` but currently has no caller. It is kept
