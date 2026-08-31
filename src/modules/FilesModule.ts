@@ -1,13 +1,16 @@
 import { Module } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { MulterModule } from "@nestjs/platform-express";
+import { TypeOrmModule } from "@nestjs/typeorm";
 import { FilesController } from "../controllers/FilesController";
+import { LibraryFileEntity } from "../entities/LibraryFileEntity";
 import { FilesService } from "../services/FilesService";
 
 const DEFAULT_FILE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 
 @Module({
 	imports: [
+		TypeOrmModule.forFeature([LibraryFileEntity]),
 		MulterModule.registerAsync({
 			inject: [ConfigService],
 			useFactory: (config: ConfigService) => ({
