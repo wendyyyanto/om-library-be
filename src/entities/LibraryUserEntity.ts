@@ -20,6 +20,9 @@ export class LibraryUserEntity {
 	@Column({ name: "password_hash", type: "varchar", length: 255 })
 	passwordHash: string;
 
+	@Column({ type: "text", nullable: true, select: false })
+	token: string | null;
+
 	@Column({
 		name: "role_id",
 		type: "int",

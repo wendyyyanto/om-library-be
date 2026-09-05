@@ -25,6 +25,8 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `POST` | `/v1/auth/logout` | bearer | `204`, no body. Revokes by cutoff — see below. |
 | `GET` | `/v1/profile` | bearer | The caller's own account. |
 | `PATCH` | `/v1/profile` | bearer | `name` for anyone; `role`/`status` admin-only. |
+| `GET` | `/v1/teachings` | bearer | Paginated teaching list, newest first. |
+| `POST` | `/v1/teachings` | bearer | Create a teaching owned by the caller. |
 | `POST` | `/v1/files` | bearer | Upload one `multipart/form-data` field named `file` to R2. |
 | `DELETE` | `/v1/files` | bearer | Delete the caller's uploaded file using `{ "file_id": "UUID" }`. |
 
@@ -46,6 +48,83 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 The R2 credentials use an R2 API token's S3 access key id and secret access key, not a
 general Cloudflare REST API bearer token. The app refuses to start if the required R2
 configuration is incomplete.
+
+## Teachings
+
+`GET /v1/teachings` returns a paginated teaching list. `page` defaults to `1`; `limit`
+defaults to `10` and accepts values from `1` through `50`. The endpoint selects only the
+fields used by the list view and returns snake-case response keys:
+
+```json
+{
+  "data": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "title": "Living by Faith",
+      "category": "Topical Teaching",
+      "teacher": "John Doe",
+      "date": "2026-08-17T00:00:00.000Z",
+      "uploaded_by": "66e76a86-9507-4b52-a2d6-f9bd7d58a68a"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total_items": 42,
+    "total_pages": 5
+  }
+}
+```
+
+Validation and other errors from this endpoint use `status_code` rather than
+`statusCode`, keeping every response key in snake case.
+
+```json
+{
+  "status_code": 400,
+  "code": "VALIDATION_FAILED",
+  "message": "Page must be a positive integer!",
+  "errors": ["Page must be a positive integer!"]
+}
+```
+
+`POST /v1/teachings` creates a teaching with `title`, `passage`, `chapters`, `category`,
+`year`, `teacher` and `event` as required fields. At least one of `audio_url` or
+`video_url` must be provided; the other media URL fields are optional and default to
+`null`. `category` accepts `New Testament`,
+`Old Testament`, `Topical Teaching` or `Workshop`. The server generates `id`, derives
+`uploaded_by` from the authenticated caller and leaves both timestamps to MySQL; clients
+cannot set those fields.
+
+```json
+{
+  "title": "Living by Faith",
+  "passage": "Romans 1:16-17",
+  "chapters": "1",
+  "category": "New Testament",
+  "year": "2026",
+  "teacher": "John Doe",
+  "event": "Sunday Ministry",
+  "audio_url": "https://example.com/audio.mp3",
+  "video_url": null,
+  "pdf_url": "https://example.com/notes.pdf",
+  "ppt_url": null
+}
+```
+
+A successful creation returns `201 Created` with the complete teaching in `data`, using
+snake-case keys throughout.
+
+If both `audio_url` and `video_url` are omitted, `null` or blank, the endpoint returns:
+
+```json
+{
+  "status_code": 400,
+  "code": "VALIDATION_FAILED",
+  "message": "At least one of audio_url or video_url is required!",
+  "errors": ["At least one of audio_url or video_url is required!"]
+}
+```
 
 ## File uploads
 
@@ -98,7 +177,8 @@ curl -X DELETE http://localhost:3000/v1/files \
 
 ## Database
 
-Four tables: `library_users`, `library_roles`, `library_statuses`, `library_files`.
+Five tables: `library_users`, `library_roles`, `library_statuses`, `library_files`,
+`teachings`.
 `synchronize` is off, so the service never alters schema at startup. Create the file metadata
 table before using the file endpoints:
 
