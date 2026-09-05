@@ -8,6 +8,7 @@ import { AuthModule } from "./AuthModule";
 import { DatabaseModule } from "./DatabaseModule";
 import { FilesModule } from "./FilesModule";
 import { ProfileModule } from "./ProfileModule";
+import { TeachingsModule } from "./TeachingsModule";
 
 @Module({
 	imports: [
@@ -16,7 +17,8 @@ import { ProfileModule } from "./ProfileModule";
 		DatabaseModule,
 		AuthModule,
 		FilesModule,
-		ProfileModule
+		ProfileModule,
+		TeachingsModule
 	],
 	controllers: [AppController],
 	providers: [

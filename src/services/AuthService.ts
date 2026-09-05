@@ -78,9 +78,12 @@ export class AuthService {
 
 		if (!this.isActive(user)) throw this.accountInactive();
 
+		const accessToken = await this.signAccessToken(user);
+		await this.users.update({ id: user.id }, { token: accessToken });
+
 		return {
 			user: this.toUserResponse(user),
-			accessToken: await this.signAccessToken(user)
+			accessToken
 		};
 	}
 

@@ -8,9 +8,15 @@ import {
 	PrimaryColumn,
 	UpdateDateColumn
 } from "typeorm";
-import { TeachingCategory } from "../constants/library";
 import { LibraryFileEntity } from "./LibraryFileEntity";
 import { LibraryUserEntity } from "./LibraryUserEntity";
+
+export enum TeachingCategory {
+	NewTestament = "New Testament",
+	OldTestament = "Old Testament",
+	TopicalTeaching = "Topical Teaching",
+	Workshop = "Workshop"
+}
 
 @Entity({ name: "teachings" })
 @Index("fk_teachings_uploaded_by", ["uploadedById"])
@@ -52,7 +58,10 @@ export class TeachingEntity {
 	})
 	audioFileId: string | null;
 
-	@ManyToOne(() => LibraryFileEntity, { nullable: true, onDelete: "SET NULL" })
+	@ManyToOne(() => LibraryFileEntity, {
+		nullable: true,
+		onDelete: "SET NULL"
+	})
 	@JoinColumn({
 		name: "audio_file_id",
 		foreignKeyConstraintName: "fk_teachings_audio_file"
@@ -72,7 +81,10 @@ export class TeachingEntity {
 	})
 	pdfFileId: string | null;
 
-	@ManyToOne(() => LibraryFileEntity, { nullable: true, onDelete: "SET NULL" })
+	@ManyToOne(() => LibraryFileEntity, {
+		nullable: true,
+		onDelete: "SET NULL"
+	})
 	@JoinColumn({
 		name: "pdf_file_id",
 		foreignKeyConstraintName: "fk_teachings_pdf_file"
@@ -89,7 +101,10 @@ export class TeachingEntity {
 	})
 	pptFileId: string | null;
 
-	@ManyToOne(() => LibraryFileEntity, { nullable: true, onDelete: "SET NULL" })
+	@ManyToOne(() => LibraryFileEntity, {
+		nullable: true,
+		onDelete: "SET NULL"
+	})
 	@JoinColumn({
 		name: "ppt_file_id",
 		foreignKeyConstraintName: "fk_teachings_ppt_file"
