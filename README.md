@@ -19,12 +19,14 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 
 | Method | Route | Auth | Notes |
 |---|---|---|---|
-| `GET` | `/` | public | Health probe. |
-| `POST` | `/auth/register` | public | Self-signup. `role` is hardcoded to `member`. |
-| `POST` | `/auth/login` | public | bcrypt password, returns `{ user, accessToken }`. |
-| `POST` | `/auth/logout` | bearer | `204`, no body. Revokes by cutoff — see below. |
-| `GET` | `/profile` | bearer | The caller's own account. |
-| `PATCH` | `/profile` | bearer | `name` for anyone; `role`/`status` admin-only. |
+| `GET` | `/v1` | public | Health probe. |
+| `POST` | `/v1/auth/register` | public | Self-signup. `role` is hardcoded to `member`. |
+| `POST` | `/v1/auth/login` | public | bcrypt password, returns `{ user, accessToken }`. |
+| `POST` | `/v1/auth/logout` | bearer | `204`, no body. Revokes by cutoff — see below. |
+| `GET` | `/v1/profile` | bearer | The caller's own account. |
+| `PATCH` | `/v1/profile` | bearer | `name` for anyone; `role`/`status` admin-only. |
+| `POST` | `/v1/files` | bearer | Upload one `multipart/form-data` field named `file` to R2. |
+| `DELETE` | `/v1/files` | bearer | Delete the caller's uploaded file using `{ "file_id": "UUID" }`. |
 
 ## Environment
 
@@ -35,11 +37,96 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `JWT_SECRET` | **yes** | none — the app refuses to start without it |
 | `JWT_EXPIRES_IN` | no | `7d` |
 | `BCRYPT_COST` | no | `12` |
+| `R2_ACCOUNT_ID` | **yes** | — |
+| `R2_ACCESS_KEY_ID` | **yes** | — |
+| `R2_SECRET_ACCESS_KEY` | **yes** | — |
+| `R2_BUCKET_NAME` | **yes** | — |
+| `FILE_UPLOAD_MAX_BYTES` | no | `10485760` (10 MiB) |
+
+The R2 credentials use an R2 API token's S3 access key id and secret access key, not a
+general Cloudflare REST API bearer token. The app refuses to start if the required R2
+configuration is incomplete.
+
+## File uploads
+
+`POST /v1/files` accepts exactly one in-memory multipart file in the `file` field and an
+optional `path` text field that selects the R2 key prefix. The path defaults to `files`.
+The default 10 MiB limit is deliberately lower than R2's object limit because the API
+buffers the upload before sending it to R2. Raise `FILE_UPLOAD_MAX_BYTES` only with the
+process's available memory and expected concurrency in mind; large or resumable uploads
+should use presigned or multipart uploads instead.
+
+```bash
+curl -X POST http://localhost:3000/v1/files \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -F "file=@./cover.jpg" \
+  -F "path=books/covers"
+```
+
+The response contains the public file id and upload metadata:
+
+```json
+{
+  "fileId": "550e8400-e29b-41d4-a716-446655440000",
+  "fileName": "cover.jpg",
+  "size": 123456,
+  "contentType": "image/jpeg"
+}
+```
+
+The service generates `fileId`, uses `{path}/{fileName}` as its internal R2 key and records
+the object metadata in `library_files`. For the example above, the key is
+`books/covers/cover.jpg`; no UUID directory is added. Upload uses R2's conditional object
+creation, so another object with the same path and filename is never silently overwritten —
+the API returns `409 FILE_ALREADY_EXISTS` instead. Leading, trailing and repeated forward
+slashes in `path` are normalized; backslashes, control characters, `.` segments and `..`
+segments are rejected. The original filename must be a single path component of at most 255
+characters. Objects remain private unless access is added separately through a signed
+download URL or another deliberate serving route.
+
+Delete a file by sending the `fileId` returned by the upload endpoint. A user can delete
+only a file whose `uploaded_by` value is their authenticated user id. Successful deletion
+removes the R2 object, sets `deleted_at` on the metadata record and returns `204` with no
+body. Repeating deletion for the same soft-deleted file also returns `204`.
+
+```bash
+curl -X DELETE http://localhost:3000/v1/files \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"file_id":"550e8400-e29b-41d4-a716-446655440000"}'
+```
 
 ## Database
 
-Three tables: `library_users`, `library_roles`, `library_statuses`. `synchronize` is off,
-so the service never alters schema at startup.
+Four tables: `library_users`, `library_roles`, `library_statuses`, `library_files`.
+`synchronize` is off, so the service never alters schema at startup. Create the file metadata
+table before using the file endpoints:
+
+```sql
+CREATE TABLE `library_files` (
+  `id` CHAR(36) NOT NULL,
+  `uploaded_by` CHAR(36) NOT NULL,
+  `storage_key` VARCHAR(255) NOT NULL,
+  `file_name` VARCHAR(255) NOT NULL,
+  `content_type` VARCHAR(255) NOT NULL,
+  `size_bytes` BIGINT UNSIGNED NOT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `deleted_at` TIMESTAMP NULL DEFAULT NULL,
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_library_files_storage_key` (`storage_key`),
+  KEY `idx_library_files_uploaded_by` (`uploaded_by`),
+
+  CONSTRAINT `fk_library_files_uploaded_by`
+    FOREIGN KEY (`uploaded_by`)
+    REFERENCES `library_users` (`id`)
+    ON UPDATE RESTRICT
+    ON DELETE RESTRICT
+) ENGINE=InnoDB;
+```
+
+The database character set and collation for `library_files.uploaded_by` must be compatible
+with `library_users.id` for MySQL to create the foreign key.
 
 `library_users.tokens_valid_from` is required and is **not** created automatically:
 
@@ -62,11 +149,11 @@ ids (`member`=1, `admin`=2; `active`=1, `inactive`=2). Rows must be seeded to ma
 
 `AuthModule` registers `JwtAuthGuard` as a global `APP_GUARD`, so **every route requires a
 bearer token** unless it carries `@Public()`. Exactly three handlers are public, listed in
-`ALLOWED_PUBLIC_ROUTES` in `commons/PublicRouteAudit.ts`: `GET /` (probes cannot send a
-token), `POST /auth/login` (locking it makes the API unreachable), and `POST /auth/register`
-(self-signup). `assertNoUnexpectedPublicRoutes()` runs at bootstrap and **refuses to start**
-if any other route carries `@Public()` — so opening an endpoint is a deliberate, reviewable
-edit to that allowlist rather than a one-line decorator.
+`ALLOWED_PUBLIC_ROUTES` in `commons/PublicRouteAudit.ts`: `GET /v1` (probes cannot send a
+token), `POST /v1/auth/login` (locking it makes the API unreachable), and `POST
+/v1/auth/register` (self-signup). `assertNoUnexpectedPublicRoutes()` runs at bootstrap and
+**refuses to start** if any other route carries `@Public()` — so opening an endpoint is a
+deliberate, reviewable edit to that allowlist rather than a one-line decorator.
 
 `RolesGuard` is applied per controller with `@UseGuards(RolesGuard)` + `@Roles(...)`, not
 globally. `CurrentUser()` is the only sanctioned source of the caller's identity.
@@ -119,7 +206,7 @@ Failures use the same `{ statusCode, code, message }` envelope with an added `er
 `constants/library.ts` already defines `LendingStatus`, `CopyStatus`, `DamageClaimStatus` and
 the member tab filters, mirroring `library_lending`, `library_book_copies` and
 `library_damage_claims`. There are **no entities, services or controllers for those tables
-yet** — the constants are ahead of the endpoints. `GET /lendings/me?tab=active|history` is
+yet** — the constants are ahead of the endpoints. `GET /v1/lendings/me?tab=active|history` is
 referenced in those comments but does not exist.
 
 `TransactionRunner` is wired into `DatabaseModule` but currently has no caller. It is kept
