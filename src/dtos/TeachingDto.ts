@@ -3,11 +3,12 @@ import {
 	IsEnum,
 	IsOptional,
 	IsUrl,
+	IsUUID,
 	ValidateBy,
 	ValidationArguments,
 	ValidationOptions
 } from "class-validator";
-import { TeachingCategory } from "../entities/TeachingEntity";
+import { TeachingCategory } from "../constants/library";
 
 export const DEFAULT_TEACHINGS_PAGE = 1;
 export const DEFAULT_TEACHINGS_LIMIT = 10;
@@ -98,7 +99,7 @@ export class GetTeachingsQueryDto {
 const CATEGORY_MESSAGE =
 	"Category must be New Testament, Old Testament, Topical Teaching, or Workshop!";
 export const TEACHING_MEDIA_REQUIRED_MESSAGE =
-	"At least one of audio_url or video_url is required!";
+	"At least one of audio_file_id or video_url is required!";
 
 export class CreateTeachingDto {
 	@Transform(({ value }) => trim(value))
@@ -131,11 +132,8 @@ export class CreateTeachingDto {
 
 	@IsOptional()
 	@Transform(({ value }) => trimOptional(value))
-	@IsUrl(
-		{ protocols: ["http", "https"], require_protocol: true, require_tld: false },
-		{ message: "Audio URL must be a valid HTTP or HTTPS URL!" }
-	)
-	audio_url?: string | null;
+	@IsUUID("4", { message: "Audio file ID must be a valid UUID!" })
+	audio_file_id?: string | null;
 
 	@IsOptional()
 	@Transform(({ value }) => trimOptional(value))
@@ -147,19 +145,13 @@ export class CreateTeachingDto {
 
 	@IsOptional()
 	@Transform(({ value }) => trimOptional(value))
-	@IsUrl(
-		{ protocols: ["http", "https"], require_protocol: true, require_tld: false },
-		{ message: "PDF URL must be a valid HTTP or HTTPS URL!" }
-	)
-	pdf_url?: string | null;
+	@IsUUID("4", { message: "PDF file ID must be a valid UUID!" })
+	pdf_file_id?: string | null;
 
 	@IsOptional()
 	@Transform(({ value }) => trimOptional(value))
-	@IsUrl(
-		{ protocols: ["http", "https"], require_protocol: true, require_tld: false },
-		{ message: "PPT URL must be a valid HTTP or HTTPS URL!" }
-	)
-	ppt_url?: string | null;
+	@IsUUID("4", { message: "PPT file ID must be a valid UUID!" })
+	ppt_file_id?: string | null;
 }
 
 export interface TeachingListItemResponse {
@@ -192,10 +184,10 @@ export interface CreatedTeachingResponse {
 	year: string;
 	teacher: string;
 	event: string;
-	audio_url: string | null;
+	audio_file_id: string | null;
 	video_url: string | null;
-	pdf_url: string | null;
-	ppt_url: string | null;
+	pdf_file_id: string | null;
+	ppt_file_id: string | null;
 	created_at: string;
 	updated_at: string;
 	uploaded_by: string;

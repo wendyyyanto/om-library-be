@@ -27,7 +27,7 @@ export class TeachingsService {
 		userId: string,
 		dto: CreateTeachingDto
 	): Promise<CreateTeachingResponse> {
-		if (!dto.audio_url && !dto.video_url)
+		if (!dto.audio_file_id && !dto.video_url)
 			throw new BadRequestException({
 				statusCode: HttpStatus.BAD_REQUEST,
 				code: ERROR_CODES.VALIDATION_FAILED,
@@ -46,10 +46,10 @@ export class TeachingsService {
 				year: dto.year,
 				teacher: dto.teacher,
 				event: dto.event,
-				audioUrl: dto.audio_url ?? null,
+				audioFileId: dto.audio_file_id ?? null,
 				videoUrl: dto.video_url ?? null,
-				pdfUrl: dto.pdf_url ?? null,
-				pptUrl: dto.ppt_url ?? null,
+				pdfFileId: dto.pdf_file_id ?? null,
+				pptFileId: dto.ppt_file_id ?? null,
 				uploadedBy: userId
 			})
 		);
@@ -110,10 +110,10 @@ export class TeachingsService {
 			year: teaching.year,
 			teacher: teaching.teacher,
 			event: teaching.event,
-			audio_url: teaching.audioUrl,
+			audio_file_id: teaching.audioFileId,
 			video_url: teaching.videoUrl,
-			pdf_url: teaching.pdfUrl,
-			ppt_url: teaching.pptUrl,
+			pdf_file_id: teaching.pdfFileId,
+			ppt_file_id: teaching.pptFileId,
 			created_at: teaching.createdAt.toISOString(),
 			updated_at: teaching.updatedAt.toISOString(),
 			uploaded_by: teaching.uploadedBy
