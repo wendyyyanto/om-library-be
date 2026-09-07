@@ -19,7 +19,7 @@ export enum TeachingCategory {
 }
 
 @Entity({ name: "teachings" })
-@Index("fk_teachings_uploaded_by", ["uploadedById"])
+@Index("fk_teachings_uploaded_by", ["uploadedBy"])
 @Index("idx_teachings_audio_file_id", ["audioFileId"])
 @Index("idx_teachings_pdf_file_id", ["pdfFileId"])
 @Index("idx_teachings_ppt_file_id", ["pptFileId"])
@@ -124,12 +124,12 @@ export class TeachingEntity {
 		charset: "utf8mb3",
 		collation: "utf8mb3_general_ci"
 	})
-	uploadedById: string;
+	uploadedBy: string;
 
 	@ManyToOne(() => LibraryUserEntity, { nullable: false })
 	@JoinColumn({
 		name: "uploaded_by",
 		foreignKeyConstraintName: "fk_teachings_uploaded_by"
 	})
-	uploadedBy: LibraryUserEntity;
+	uploader: LibraryUserEntity;
 }

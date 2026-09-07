@@ -89,9 +89,9 @@ Validation and other errors from this endpoint use `status_code` rather than
 ```
 
 `POST /v1/teachings` creates a teaching with `title`, `passage`, `chapters`, `category`,
-`year`, `teacher` and `event` as required fields. At least one of `audio_url` or
-`video_url` must be provided; the other media URL fields are optional and default to
-`null`. `category` accepts `New Testament`,
+`year`, `teacher` and `event` as required fields. At least one of `audio_file_id` or
+`video_url` must be provided. `audio_file_id`, `pdf_file_id` and `ppt_file_id` reference
+previously uploaded library files and default to `null`. `category` accepts `New Testament`,
 `Old Testament`, `Topical Teaching` or `Workshop`. The server generates `id`, derives
 `uploaded_by` from the authenticated caller and leaves both timestamps to MySQL; clients
 cannot set those fields.
@@ -105,24 +105,24 @@ cannot set those fields.
 	"year": "2026",
 	"teacher": "John Doe",
 	"event": "Sunday Ministry",
-	"audio_url": "https://example.com/audio.mp3",
+	"audio_file_id": "319b925f-48c6-4e4d-9ee7-a114eacf0b63",
 	"video_url": null,
-	"pdf_url": "https://example.com/notes.pdf",
-	"ppt_url": null
+	"pdf_file_id": "c96d934f-2154-4fea-bf0d-a97f519863f7",
+	"ppt_file_id": null
 }
 ```
 
 A successful creation returns `201 Created` with the complete teaching in `data`, using
 snake-case keys throughout.
 
-If both `audio_url` and `video_url` are omitted, `null` or blank, the endpoint returns:
+If both `audio_file_id` and `video_url` are omitted, `null` or blank, the endpoint returns:
 
 ```json
 {
 	"status_code": 400,
 	"code": "VALIDATION_FAILED",
-	"message": "At least one of audio_url or video_url is required!",
-	"errors": ["At least one of audio_url or video_url is required!"]
+	"message": "At least one of audio_file_id or video_url is required!",
+	"errors": ["At least one of audio_file_id or video_url is required!"]
 }
 ```
 
