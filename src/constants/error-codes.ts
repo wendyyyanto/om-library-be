@@ -1,0 +1,62 @@
+export const ERROR_CODES = {
+	// Auth & profile
+	EMAIL_TAKEN: "EMAIL_TAKEN",
+	INVALID_CREDENTIALS: "INVALID_CREDENTIALS",
+	ACCOUNT_INACTIVE: "ACCOUNT_INACTIVE",
+	UNAUTHORIZED: "UNAUTHORIZED",
+	SESSION_REVOKED: "SESSION_REVOKED",
+	FORBIDDEN: "FORBIDDEN",
+
+	// Lending
+	ACTIVE_LIMIT_REACHED: "ACTIVE_LIMIT_REACHED",
+	NO_COPY_AVAILABLE: "NO_COPY_AVAILABLE",
+	DUPLICATE_REQUEST: "DUPLICATE_REQUEST",
+	INVALID_STATE: "INVALID_STATE",
+	INVALID_DUE_DATE: "INVALID_DUE_DATE",
+	PHOTO_REQUIRED: "PHOTO_REQUIRED",
+
+	// Copies & claims
+	COPY_NOT_AVAILABLE: "COPY_NOT_AVAILABLE",
+	COPY_BOOK_MISMATCH: "COPY_BOOK_MISMATCH",
+	COPY_NOT_CLAIMABLE: "COPY_NOT_CLAIMABLE",
+	NO_LENDING_HISTORY: "NO_LENDING_HISTORY",
+	ALREADY_RESOLVED: "ALREADY_RESOLVED",
+
+	// Generic / driver-level
+	VALIDATION_FAILED: "VALIDATION_FAILED",
+	NOT_FOUND: "NOT_FOUND",
+	DUPLICATE_ENTRY: "DUPLICATE_ENTRY",
+	INVALID_REFERENCE: "INVALID_REFERENCE",
+	DATABASE_BUSY: "DATABASE_BUSY",
+	DATABASE_ERROR: "DATABASE_ERROR"
+} as const;
+
+export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
+
+/** MySQL/MariaDB driver error numbers we translate rather than leak. */
+export const MYSQL_ERROR = {
+	/** ER_DUP_ENTRY — unique index violation. */
+	DUP_ENTRY: 1062,
+	/** ER_NO_REFERENCED_ROW_2 — insert/update broke a foreign key. */
+	NO_REFERENCED_ROW: 1452,
+	/** ER_ROW_IS_REFERENCED_2 — delete blocked by a foreign key. */
+	ROW_IS_REFERENCED: 1451,
+	/** ER_LOCK_DEADLOCK — deadlock, safe to retry the whole transaction. */
+	LOCK_DEADLOCK: 1213,
+	/** ER_LOCK_WAIT_TIMEOUT — lock wait timed out, also retryable. */
+	LOCK_WAIT_TIMEOUT: 1205,
+	/** ER_CHECK_CONSTRAINT_VIOLATED. */
+	CHECK_CONSTRAINT: 3819
+} as const;
+
+/** Driver errors that a transaction may safely be replayed for. */
+export const RETRYABLE_MYSQL_ERRORS: readonly number[] = [
+	MYSQL_ERROR.LOCK_DEADLOCK,
+	MYSQL_ERROR.LOCK_WAIT_TIMEOUT
+];
+
+export interface ApiErrorBody {
+	statusCode: number;
+	code: ErrorCode;
+	message: string;
+}
