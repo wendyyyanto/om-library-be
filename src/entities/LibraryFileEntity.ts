@@ -1,9 +1,4 @@
-import {
-	Column,
-	CreateDateColumn,
-	Entity,
-	PrimaryColumn
-} from "typeorm";
+import { Column, CreateDateColumn, Entity, PrimaryColumn } from "typeorm";
 
 @Entity({ name: "library_files" })
 export class LibraryFileEntity {
