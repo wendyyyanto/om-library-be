@@ -1,55 +1,33 @@
-import {
-	Column,
-	CreateDateColumn,
-	DeleteDateColumn,
-	Entity,
-	Index,
-	JoinColumn,
-	ManyToOne,
-	PrimaryColumn
-} from "typeorm";
-import { LibraryUserEntity } from "./LibraryUserEntity";
+import { Column, CreateDateColumn, Entity, PrimaryColumn } from "typeorm";
 
 @Entity({ name: "library_files" })
-@Index("uq_library_files_storage_key", ["storageKey"], { unique: true })
-@Index("idx_library_files_uploaded_by", ["uploadedById"])
 export class LibraryFileEntity {
 	@PrimaryColumn({ type: "char", length: 36 })
 	id: string;
 
 	@Column({ name: "uploaded_by", type: "char", length: 36 })
-	uploadedById: string;
+	uploadedBy: string;
 
-	@ManyToOne(() => LibraryUserEntity, { nullable: false })
-	@JoinColumn({
-		name: "uploaded_by",
-		foreignKeyConstraintName: "fk_library_files_uploaded_by"
+	@Column({
+		name: "storage_key",
+		type: "varchar",
+		length: 255,
+		unique: true
 	})
-	uploadedBy: LibraryUserEntity;
-
-	@Column({ name: "storage_key", type: "text" })
 	storageKey: string;
 
-	@Column({ name: "file_name", type: "text" })
+	@Column({ name: "file_name", type: "varchar", length: 255 })
 	fileName: string;
-
-	@Column({ type: "text", nullable: true })
-	url: string | null;
 
 	@Column({ name: "content_type", type: "varchar", length: 255 })
 	contentType: string;
 
-	@Column({
-		name: "size_bytes",
-		type: "bigint",
-		unsigned: true,
-		nullable: true
-	})
-	sizeBytes: string | null;
+	@Column({ name: "size_bytes", type: "bigint", unsigned: true })
+	sizeBytes: number;
 
 	@CreateDateColumn({ name: "created_at", type: "timestamp" })
 	createdAt: Date;
 
-	@DeleteDateColumn({ name: "deleted_at", type: "timestamp", nullable: true })
+	@Column({ name: "deleted_at", type: "timestamp", nullable: true })
 	deletedAt: Date | null;
 }
