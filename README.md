@@ -26,6 +26,7 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `GET`    | `/v1/profile`       | bearer | The caller's own account.                                        |
 | `PATCH`  | `/v1/profile`       | bearer | `name` for anyone; `role`/`status` admin-only.                   |
 | `GET`    | `/v1/teachings`     | bearer | Paginated teaching list, newest first.                           |
+| `GET`    | `/v1/teachings/:id` | bearer | Teaching detail with active file metadata.                       |
 | `POST`   | `/v1/teachings`     | bearer | Create a teaching owned by the caller.                           |
 | `POST`   | `/v1/files`         | bearer | Upload one `multipart/form-data` field named `file` to R2.       |
 | `DELETE` | `/v1/files`         | bearer | Delete the caller's uploaded file using `{ "file_id": "UUID" }`. |
@@ -85,6 +86,56 @@ Validation and other errors from this endpoint use `status_code` rather than
 	"code": "VALIDATION_FAILED",
 	"message": "Page must be a positive integer!",
 	"errors": ["Page must be a positive integer!"]
+}
+```
+
+`GET /v1/teachings/:id` returns the complete teaching and resolves its active audio, PDF
+and presentation file relations. Related file metadata is grouped into separate objects;
+internal storage keys and file ownership are not exposed:
+
+```json
+{
+	"data": {
+		"id": "550e8400-e29b-41d4-a716-446655440000",
+		"title": "Living by Faith",
+		"passage": "Romans 1:16-17",
+		"chapters": "1",
+		"category": "Topical Teaching",
+		"year": "2026",
+		"teacher": "John Doe",
+		"event": "Sunday Ministry",
+		"audio_file": {
+			"id": "319b925f-48c6-4e4d-9ee7-a114eacf0b63",
+			"file_name": "living-by-faith.mp3",
+			"content_type": "audio/mpeg",
+			"size_bytes": 8542130,
+			"url": "https://cdn.example.com/teachings/living-by-faith.mp3"
+		},
+		"video_url": null,
+		"pdf_file": {
+			"id": "c96d934f-2154-4fea-bf0d-a97f519863f7",
+			"file_name": "living-by-faith.pdf",
+			"content_type": "application/pdf",
+			"size_bytes": 532100,
+			"url": "https://cdn.example.com/teachings/living-by-faith.pdf"
+		},
+		"ppt_file": null,
+		"created_at": "2026-08-17T00:00:00.000Z",
+		"updated_at": "2026-08-17T00:00:00.000Z",
+		"uploaded_by": "66e76a86-9507-4b52-a2d6-f9bd7d58a68a"
+	}
+}
+```
+
+A missing or soft-deleted related file is returned as `null`. An active file whose `url`
+has not been populated is returned with `url: null`. Invalid teaching ids return
+`400 VALIDATION_FAILED`; valid ids with no matching teaching return:
+
+```json
+{
+	"status_code": 404,
+	"code": "NOT_FOUND",
+	"message": "Teaching not found."
 }
 ```
 
