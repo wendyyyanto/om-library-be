@@ -25,10 +25,14 @@ export class SnakeCaseExceptionFilter implements ExceptionFilter {
 		const http = host.switchToHttp();
 		const request = http.getRequest<Request>();
 		const response = http.getResponse<Response>();
+		const isDetailRequest =
+			request.method === "GET" && typeof request.params.id === "string";
 		const databaseErrorMessage =
 			request.method === "POST"
 				? "The teaching could not be created."
-				: "The teachings could not be retrieved.";
+				: isDetailRequest
+					? "The teaching could not be retrieved."
+					: "The teachings could not be retrieved.";
 
 		if (exception instanceof QueryFailedError) {
 			this.logger.error("A teachings database query failed.");

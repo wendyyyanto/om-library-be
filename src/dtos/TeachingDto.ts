@@ -96,6 +96,11 @@ export class GetTeachingsQueryDto {
 	limit?: number;
 }
 
+export class GetTeachingParamsDto {
+	@IsUUID(undefined, { message: "Teaching ID must be a valid UUID!" })
+	id: string;
+}
+
 const CATEGORY_MESSAGE =
 	"Category must be New Testament, Old Testament, Topical Teaching, or Workshop!";
 export const TEACHING_MEDIA_REQUIRED_MESSAGE =
@@ -173,6 +178,36 @@ export interface TeachingsPaginationResponse {
 export interface TeachingsListResponse {
 	data: TeachingListItemResponse[];
 	pagination: TeachingsPaginationResponse;
+}
+
+export interface TeachingFileResponse {
+	id: string;
+	file_name: string;
+	content_type: string;
+	size_bytes: number | null;
+	url: string | null;
+}
+
+export interface TeachingDetailDataResponse {
+	id: string;
+	title: string;
+	passage: string;
+	chapters: string;
+	category: TeachingCategory;
+	year: string;
+	teacher: string;
+	event: string;
+	audio_file: TeachingFileResponse | null;
+	video_url: string | null;
+	pdf_file: TeachingFileResponse | null;
+	ppt_file: TeachingFileResponse | null;
+	created_at: string;
+	updated_at: string;
+	uploaded_by: string;
+}
+
+export interface TeachingDetailResponse {
+	data: TeachingDetailDataResponse;
 }
 
 export interface CreatedTeachingResponse {

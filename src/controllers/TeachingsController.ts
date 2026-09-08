@@ -4,6 +4,7 @@ import {
 	Get,
 	HttpCode,
 	HttpStatus,
+	Param,
 	Post,
 	Query,
 	UseFilters
@@ -13,7 +14,9 @@ import { CurrentUser } from "../commons/CurrentUser";
 import {
 	CreateTeachingDto,
 	CreateTeachingResponse,
+	GetTeachingParamsDto,
 	GetTeachingsQueryDto,
+	TeachingDetailResponse,
 	TeachingsListResponse
 } from "../dtos/TeachingDto";
 import { TeachingsService } from "../services/TeachingsService";
@@ -38,5 +41,13 @@ export class TeachingsController {
 		@Query() query: GetTeachingsQueryDto
 	): Promise<TeachingsListResponse> {
 		return this.teachingsService.list(query);
+	}
+
+	@Get(":id")
+	@HttpCode(HttpStatus.OK)
+	async getById(
+		@Param() params: GetTeachingParamsDto
+	): Promise<TeachingDetailResponse> {
+		return this.teachingsService.getById(params.id);
 	}
 }
