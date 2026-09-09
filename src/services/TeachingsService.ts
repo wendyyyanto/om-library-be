@@ -1,12 +1,15 @@
 import {
 	BadRequestException,
+	ConflictException,
+	ForbiddenException,
 	HttpStatus,
 	Injectable,
+	Logger,
 	NotFoundException
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { randomUUID } from "node:crypto";
-import { Repository } from "typeorm";
+import { In, Repository } from "typeorm";
 import { ERROR_CODES } from "../constants/error-codes";
 import {
 	CreatedTeachingResponse,
@@ -24,12 +27,18 @@ import {
 } from "../dtos/TeachingDto";
 import { LibraryFileEntity } from "../entities/LibraryFileEntity";
 import { TeachingEntity } from "../entities/TeachingEntity";
+import { TransactionRunner } from "../utilities/TransactionRunner";
+import { FilesService } from "./FilesService";
 
 @Injectable()
 export class TeachingsService {
+	private readonly logger = new Logger(TeachingsService.name);
+
 	constructor(
 		@InjectRepository(TeachingEntity)
-		private readonly teachings: Repository<TeachingEntity>
+		private readonly teachings: Repository<TeachingEntity>,
+		private readonly filesService: FilesService,
+		private readonly transactions: TransactionRunner
 	) {}
 
 	async create(
@@ -99,21 +108,9 @@ export class TeachingsService {
 	async getById(id: string): Promise<TeachingDetailResponse> {
 		const teaching = await this.teachings
 			.createQueryBuilder("teaching")
-			.leftJoinAndSelect(
-				"teaching.audioFile",
-				"audioFile",
-				"audioFile.deletedAt IS NULL"
-			)
-			.leftJoinAndSelect(
-				"teaching.pdfFile",
-				"pdfFile",
-				"pdfFile.deletedAt IS NULL"
-			)
-			.leftJoinAndSelect(
-				"teaching.pptFile",
-				"pptFile",
-				"pptFile.deletedAt IS NULL"
-			)
+			.leftJoinAndSelect("teaching.audioFile", "audioFile")
+			.leftJoinAndSelect("teaching.pdfFile", "pdfFile")
+			.leftJoinAndSelect("teaching.pptFile", "pptFile")
 			.select([
 				"teaching.id",
 				"teaching.title",
@@ -149,6 +146,108 @@ export class TeachingsService {
 		if (!teaching) throw this.teachingNotFound();
 
 		return { data: this.toDetailResponse(teaching) };
+	}
+
+	async delete(userId: string, id: string): Promise<void> {
+		const deletedStorageFileIds = new Set<string>();
+		try {
+			await this.transactions.run(async (manager) => {
+				const teachings = manager.getRepository(TeachingEntity);
+				const teaching = await teachings
+					.createQueryBuilder("teaching")
+					.select([
+						"teaching.id",
+						"teaching.uploadedBy",
+						"teaching.audioFileId",
+						"teaching.pdfFileId",
+						"teaching.pptFileId"
+					])
+					.where("teaching.id = :id", { id })
+					.setLock("pessimistic_write")
+					.getOne();
+
+				if (!teaching) throw this.teachingNotFound();
+				if (teaching.uploadedBy !== userId) throw this.forbidden();
+
+				const fileIds = [
+					...new Set(
+						[
+							teaching.audioFileId,
+							teaching.pdfFileId,
+							teaching.pptFileId
+						].filter((fileId): fileId is string => fileId !== null)
+					)
+				];
+
+				if (fileIds.length > 0) {
+					const files = await manager
+						.getRepository(LibraryFileEntity)
+						.createQueryBuilder("file")
+						.select(["file.id", "file.uploadedBy", "file.storageKey"])
+						.where("file.id IN (:...fileIds)", { fileIds })
+						.setLock("pessimistic_write")
+						.getMany();
+
+					if (files.length !== fileIds.length)
+						throw this.invalidFileState(
+							"One or more teaching files no longer exist."
+						);
+					if (files.some((file) => file.uploadedBy !== userId))
+						throw this.invalidFileState(
+							"The teaching contains a file owned by another user."
+						);
+					if (await this.hasSharedFile(id, fileIds, teachings))
+						throw this.invalidFileState(
+							"The teaching contains a file that is still used by another teaching."
+						);
+
+					for (const file of files) {
+						await this.filesService.deleteStoredObject(
+							file.storageKey,
+							"One or more teaching files could not be deleted. Please try again."
+						);
+						deletedStorageFileIds.add(file.id);
+					}
+				}
+
+				const teachingResult = await teachings.delete({ id });
+				if (teachingResult.affected !== 1)
+					throw new Error("The locked teaching row could not be deleted.");
+
+				if (fileIds.length > 0) {
+					const fileResult = await manager
+						.getRepository(LibraryFileEntity)
+						.delete({ id: In(fileIds) });
+					if (fileResult.affected !== fileIds.length)
+						throw new Error(
+							"Not all locked teaching file rows were deleted."
+						);
+				}
+			});
+		} catch (error) {
+			if (deletedStorageFileIds.size > 0)
+				this.logger.error(
+					`Teaching ${id} needs reconciliation after R2 deletion of file ids ${[
+						...deletedStorageFileIds
+					].join(", ")} did not result in a committed database deletion.`
+				);
+			throw error;
+		}
+	}
+
+	private async hasSharedFile(
+		teachingId: string,
+		fileIds: string[],
+		teachings: Repository<TeachingEntity>
+	): Promise<boolean> {
+		return teachings
+			.createQueryBuilder("teaching")
+			.where("teaching.id <> :teachingId", { teachingId })
+			.andWhere(
+				"(teaching.audioFileId IN (:...fileIds) OR teaching.pdfFileId IN (:...fileIds) OR teaching.pptFileId IN (:...fileIds))",
+				{ fileIds }
+			)
+			.getExists();
 	}
 
 	private toResponse(teaching: TeachingEntity): TeachingListItemResponse {
@@ -225,6 +324,22 @@ export class TeachingsService {
 			statusCode: HttpStatus.NOT_FOUND,
 			code: ERROR_CODES.NOT_FOUND,
 			message: "Teaching not found."
+		});
+	}
+
+	private forbidden(): ForbiddenException {
+		return new ForbiddenException({
+			statusCode: HttpStatus.FORBIDDEN,
+			code: ERROR_CODES.FORBIDDEN,
+			message: "You do not have permission to delete this teaching."
+		});
+	}
+
+	private invalidFileState(message: string): ConflictException {
+		return new ConflictException({
+			statusCode: HttpStatus.CONFLICT,
+			code: ERROR_CODES.INVALID_STATE,
+			message
 		});
 	}
 }

@@ -16,13 +16,17 @@ import {
 } from "@aws-sdk/client-s3";
 import { InjectRepository } from "@nestjs/typeorm";
 import { randomUUID } from "node:crypto";
-import { IsNull, Repository } from "typeorm";
+import { EntityManager, Repository } from "typeorm";
 import { ERROR_CODES } from "../constants/error-codes";
 import { FileUploadResponse } from "../dtos/FileDto";
 import { LibraryFileEntity } from "../entities/LibraryFileEntity";
+import { TeachingEntity } from "../entities/TeachingEntity";
+import { TransactionRunner } from "../utilities/TransactionRunner";
 
 @Injectable()
 export class FilesService {
+	private static readonly ASSET_BASE_URL =
+		"https://assets.organic-ministry.org";
 	private readonly logger = new Logger(FilesService.name);
 	private readonly bucket: string;
 	private readonly r2: S3Client;
@@ -30,7 +34,8 @@ export class FilesService {
 	constructor(
 		config: ConfigService,
 		@InjectRepository(LibraryFileEntity)
-		private readonly files: Repository<LibraryFileEntity>
+		private readonly files: Repository<LibraryFileEntity>,
+		private readonly transactions: TransactionRunner
 	) {
 		const accountId = this.requiredConfig(config, "CLOUDFLARE_ACCOUNT_ID");
 		const accessKeyId = this.requiredConfig(config, "R2_ACCESS_KEY_ID");
@@ -92,9 +97,9 @@ export class FilesService {
 					uploadedBy: userId,
 					storageKey: key,
 					fileName: file.originalname,
+					url: this.assetUrl(key),
 					contentType,
-					sizeBytes: file.size,
-					deletedAt: null
+					sizeBytes: file.size
 				})
 			);
 		} catch (error) {
@@ -111,39 +116,53 @@ export class FilesService {
 	}
 
 	async delete(userId: string, fileId: string): Promise<void> {
-		const file = await this.files.findOne({
-			where: { id: fileId },
-			select: {
-				id: true,
-				uploadedBy: true,
-				storageKey: true,
-				deletedAt: true
-			}
-		});
-		if (!file) throw this.fileNotFound();
-		if (file.uploadedBy !== userId) throw this.forbidden();
-		if (file.deletedAt) return;
+		let storageObjectDeleted = false;
+		try {
+			await this.transactions.run(async (manager) => {
+				const files = manager.getRepository(LibraryFileEntity);
+				const file = await files
+					.createQueryBuilder("file")
+					.select(["file.id", "file.uploadedBy", "file.storageKey"])
+					.where("file.id = :fileId", { fileId })
+					.setLock("pessimistic_write")
+					.getOne();
 
+				if (!file) throw this.fileNotFound();
+				if (file.uploadedBy !== userId) throw this.forbidden();
+				if (await this.isReferencedByTeaching(manager, file.id))
+					throw this.fileInUse();
+
+				await this.deleteStoredObject(file.storageKey);
+				storageObjectDeleted = true;
+				const result = await files.delete({ id: file.id, uploadedBy: userId });
+				if (result.affected !== 1)
+					throw new Error("The locked file row could not be deleted.");
+			});
+		} catch (error) {
+			if (storageObjectDeleted)
+				this.logger.error(
+					`File ${fileId} needs reconciliation after its R2 object was deleted but its database transaction failed.`
+				);
+			throw error;
+		}
+	}
+
+	async deleteStoredObject(
+		storageKey: string,
+		message = "The file could not be deleted. Please try again."
+	): Promise<void> {
 		try {
 			await this.r2.send(
-				new DeleteObjectCommand({
-					Bucket: this.bucket,
-					Key: file.storageKey
-				})
+				new DeleteObjectCommand({ Bucket: this.bucket, Key: storageKey })
 			);
 		} catch (error) {
 			this.logger.error(`R2 delete failed (${this.errorName(error)}).`);
 			throw new BadGatewayException({
 				statusCode: HttpStatus.BAD_GATEWAY,
 				code: ERROR_CODES.FILE_DELETE_FAILED,
-				message: "The file could not be deleted. Please try again."
+				message
 			});
 		}
-
-		await this.files.update(
-			{ id: file.id, uploadedBy: userId, deletedAt: IsNull() },
-			{ deletedAt: new Date() }
-		);
 	}
 
 	private requiredConfig(config: ConfigService, name: string): string {
@@ -204,6 +223,14 @@ export class FilesService {
 		return key;
 	}
 
+	private assetUrl(storageKey: string): string {
+		const encodedKey = storageKey
+			.split("/")
+			.map((segment) => encodeURIComponent(segment))
+			.join("/");
+		return `${FilesService.ASSET_BASE_URL}/${encodedKey}`;
+	}
+
 	private fileAlreadyExists(): ConflictException {
 		return new ConflictException({
 			statusCode: HttpStatus.CONFLICT,
@@ -226,6 +253,28 @@ export class FilesService {
 			code: ERROR_CODES.FORBIDDEN,
 			message: "You do not have permission to delete this file."
 		});
+	}
+
+	private fileInUse(): ConflictException {
+		return new ConflictException({
+			statusCode: HttpStatus.CONFLICT,
+			code: ERROR_CODES.INVALID_STATE,
+			message: "The file is still used by a teaching."
+		});
+	}
+
+	private async isReferencedByTeaching(
+		manager: EntityManager,
+		fileId: string
+	): Promise<boolean> {
+		return manager
+			.getRepository(TeachingEntity)
+			.createQueryBuilder("teaching")
+			.where(
+				"(teaching.audioFileId = :fileId OR teaching.pdfFileId = :fileId OR teaching.pptFileId = :fileId)",
+				{ fileId }
+			)
+			.getExists();
 	}
 
 	private async removeOrphanedUpload(

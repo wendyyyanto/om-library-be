@@ -1,6 +1,7 @@
 import {
 	Body,
 	Controller,
+	Delete,
 	Get,
 	HttpCode,
 	HttpStatus,
@@ -49,5 +50,14 @@ export class TeachingsController {
 		@Param() params: GetTeachingParamsDto
 	): Promise<TeachingDetailResponse> {
 		return this.teachingsService.getById(params.id);
+	}
+
+	@Delete(":id")
+	@HttpCode(HttpStatus.NO_CONTENT)
+	async delete(
+		@CurrentUser("id") userId: string,
+		@Param() params: GetTeachingParamsDto
+	): Promise<void> {
+		return this.teachingsService.delete(userId, params.id);
 	}
 }
