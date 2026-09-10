@@ -72,6 +72,13 @@ export enum DamageClaimStatus {
 	Waived = "waived"
 }
 
+export enum TeachingCategory {
+	NewTestament = "New Testament",
+	OldTestament = "Old Testament",
+	TopicalTeaching = "Topical Teaching",
+	Workshop = "Workshop"
+}
+
 export const ACTIVE_LENDING_STATUSES: readonly LendingStatus[] = [
 	LendingStatus.Approved
 ];

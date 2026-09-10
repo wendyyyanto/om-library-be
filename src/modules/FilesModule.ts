@@ -4,13 +4,14 @@ import { MulterModule } from "@nestjs/platform-express";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { FilesController } from "../controllers/FilesController";
 import { LibraryFileEntity } from "../entities/LibraryFileEntity";
+import { TeachingEntity } from "../entities/TeachingEntity";
 import { FilesService } from "../services/FilesService";
 
 const DEFAULT_FILE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 
 @Module({
 	imports: [
-		TypeOrmModule.forFeature([LibraryFileEntity]),
+		TypeOrmModule.forFeature([LibraryFileEntity, TeachingEntity]),
 		MulterModule.registerAsync({
 			inject: [ConfigService],
 			useFactory: (config: ConfigService) => ({
@@ -22,7 +23,8 @@ const DEFAULT_FILE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 		})
 	],
 	controllers: [FilesController],
-	providers: [FilesService]
+	providers: [FilesService],
+	exports: [FilesService]
 })
 export class FilesModule {}
 

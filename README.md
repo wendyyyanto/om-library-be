@@ -25,6 +25,10 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `POST`   | `/v1/auth/logout`   | bearer | `204`, no body. Revokes by cutoff — see below.                   |
 | `GET`    | `/v1/profile`       | bearer | The caller's own account.                                        |
 | `PATCH`  | `/v1/profile`       | bearer | `name` for anyone; `role`/`status` admin-only.                   |
+| `GET`    | `/v1/teachings`     | bearer | Paginated teaching list, newest first.                           |
+| `GET`    | `/v1/teachings/:id` | bearer | Teaching detail with file metadata.                              |
+| `POST`   | `/v1/teachings`     | bearer | Create a teaching owned by the caller.                           |
+| `DELETE` | `/v1/teachings/:id` | bearer | Hard-delete an owned teaching and its unshared files.            |
 | `POST`   | `/v1/files`         | bearer | Upload one `multipart/form-data` field named `file` to R2.       |
 | `DELETE` | `/v1/files`         | bearer | Delete the caller's uploaded file using `{ "file_id": "UUID" }`. |
 
@@ -37,7 +41,7 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `JWT_SECRET`                                      | **yes**  | none — the app refuses to start without it |
 | `JWT_EXPIRES_IN`                                  | no       | `7d`                                       |
 | `BCRYPT_COST`                                     | no       | `12`                                       |
-| `R2_ACCOUNT_ID`                                   | **yes**  | —                                          |
+| `CLOUDFLARE_ACCOUNT_ID`                           | **yes**  | —                                          |
 | `R2_ACCESS_KEY_ID`                                | **yes**  | —                                          |
 | `R2_SECRET_ACCESS_KEY`                            | **yes**  | —                                          |
 | `R2_BUCKET_NAME`                                  | **yes**  | —                                          |
@@ -46,6 +50,154 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 The R2 credentials use an R2 API token's S3 access key id and secret access key, not a
 general Cloudflare REST API bearer token. The app refuses to start if the required R2
 configuration is incomplete.
+
+## Teachings
+
+`GET /v1/teachings` returns a paginated teaching list. `page` defaults to `1`; `limit`
+defaults to `10` and accepts values from `1` through `50`. The endpoint selects only the
+fields used by the list view and returns snake-case response keys:
+
+```json
+{
+	"data": [
+		{
+			"id": "550e8400-e29b-41d4-a716-446655440000",
+			"title": "Living by Faith",
+			"category": "Topical Teaching",
+			"teacher": "John Doe",
+			"date": "2026-08-17T00:00:00.000Z",
+			"uploaded_by": "66e76a86-9507-4b52-a2d6-f9bd7d58a68a"
+		}
+	],
+	"pagination": {
+		"page": 1,
+		"limit": 10,
+		"total_items": 42,
+		"total_pages": 5
+	}
+}
+```
+
+Validation and other errors from this endpoint use `status_code` rather than
+`statusCode`, keeping every response key in snake case.
+
+```json
+{
+	"status_code": 400,
+	"code": "VALIDATION_FAILED",
+	"message": "Page must be a positive integer!",
+	"errors": ["Page must be a positive integer!"]
+}
+```
+
+`GET /v1/teachings/:id` returns the complete teaching and resolves its active audio, PDF
+and presentation file relations. Related file metadata is grouped into separate objects;
+internal storage keys and file ownership are not exposed:
+
+```json
+{
+	"data": {
+		"id": "550e8400-e29b-41d4-a716-446655440000",
+		"title": "Living by Faith",
+		"passage": "Romans 1:16-17",
+		"chapters": "1",
+		"category": "Topical Teaching",
+		"year": "2026",
+		"teacher": "John Doe",
+		"event": "Sunday Ministry",
+		"audio_file": {
+			"id": "319b925f-48c6-4e4d-9ee7-a114eacf0b63",
+			"file_name": "living-by-faith.mp3",
+			"content_type": "audio/mpeg",
+			"size_bytes": 8542130,
+			"url": "https://cdn.example.com/teachings/living-by-faith.mp3"
+		},
+		"video_url": null,
+		"pdf_file": {
+			"id": "c96d934f-2154-4fea-bf0d-a97f519863f7",
+			"file_name": "living-by-faith.pdf",
+			"content_type": "application/pdf",
+			"size_bytes": 532100,
+			"url": "https://cdn.example.com/teachings/living-by-faith.pdf"
+		},
+		"ppt_file": null,
+		"created_at": "2026-08-17T00:00:00.000Z",
+		"updated_at": "2026-08-17T00:00:00.000Z",
+		"uploaded_by": "66e76a86-9507-4b52-a2d6-f9bd7d58a68a"
+	}
+}
+```
+
+A missing related file is returned as `null`. A file whose `url` has not been populated is
+returned with `url: null`. Invalid teaching ids return
+`400 VALIDATION_FAILED`; valid ids with no matching teaching return:
+
+```json
+{
+	"status_code": 404,
+	"code": "NOT_FOUND",
+	"message": "Teaching not found."
+}
+```
+
+`POST /v1/teachings` creates a teaching with `title`, `passage`, `chapters`, `category`,
+`year`, `teacher` and `event` as required fields. At least one of `audio_file_id` or
+`video_url` must be provided. `audio_file_id`, `pdf_file_id` and `ppt_file_id` reference
+previously uploaded library files and default to `null`. `category` accepts `New Testament`,
+`Old Testament`, `Topical Teaching` or `Workshop`. The server generates `id`, derives
+`uploaded_by` from the authenticated caller and leaves both timestamps to MySQL; clients
+cannot set those fields.
+
+```json
+{
+	"title": "Living by Faith",
+	"passage": "Romans 1:16-17",
+	"chapters": "1",
+	"category": "New Testament",
+	"year": "2026",
+	"teacher": "John Doe",
+	"event": "Sunday Ministry",
+	"audio_file_id": "319b925f-48c6-4e4d-9ee7-a114eacf0b63",
+	"video_url": null,
+	"pdf_file_id": "c96d934f-2154-4fea-bf0d-a97f519863f7",
+	"ppt_file_id": null
+}
+```
+
+A successful creation returns `201 Created` with the complete teaching in `data`, using
+snake-case keys throughout.
+
+If both `audio_file_id` and `video_url` are omitted, `null` or blank, the endpoint returns:
+
+```json
+{
+	"status_code": 400,
+	"code": "VALIDATION_FAILED",
+	"message": "At least one of audio_file_id or video_url is required!",
+	"errors": ["At least one of audio_file_id or video_url is required!"]
+}
+```
+
+`DELETE /v1/teachings/:id` hard-deletes a teaching owned by the authenticated caller. The
+service obtains the audio, PDF and presentation storage keys from `library_files`; clients
+must not send storage keys. Duplicate file ids across those three fields are processed once.
+For every attached file, the service deletes the R2 object and hard-deletes the corresponding
+`library_files` row. `video_url` is external metadata and is not deleted.
+
+```bash
+curl -X DELETE http://localhost:3000/v1/teachings/550e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+Success returns `204` with no body. A valid but missing teaching returns `404`; a teaching
+owned by another user returns `403`. Deletion returns `409 INVALID_STATE` without changing
+anything when an attached file is owned by another user, missing, or referenced from any file
+column of another teaching. An R2 failure returns `502 FILE_DELETE_FAILED`.
+
+R2 and MySQL cannot share one atomic transaction. The endpoint deletes R2 objects before
+committing its database deletes, so a later database failure can leave an object absent while
+its metadata remains. A durable deletion outbox with retries is required if guaranteed
+cross-system recovery becomes a requirement.
 
 ## File uploads
 
@@ -76,18 +228,19 @@ The response contains the public file id and upload metadata:
 
 The service generates `fileId`, uses `{path}/{fileName}` as its internal R2 key and records
 the object metadata in `library_files`. For the example above, the key is
-`books/covers/cover.jpg`; no UUID directory is added. Upload uses R2's conditional object
-creation, so another object with the same path and filename is never silently overwritten —
-the API returns `409 FILE_ALREADY_EXISTS` instead. Leading, trailing and repeated forward
-slashes in `path` are normalized; backslashes, control characters, `.` segments and `..`
-segments are rejected. The original filename must be a single path component of at most 255
-characters. Objects remain private unless access is added separately through a signed
-download URL or another deliberate serving route.
+`books/covers/cover.jpg`; no UUID directory is added. The `url` column receives the public
+asset URL at `https://assets.organic-ministry.org/{storage_key}` with each path segment URL
+encoded while preserving `/` separators. Upload uses R2's conditional object creation, so
+another object with the same path and filename is never silently overwritten — the API
+returns `409 FILE_ALREADY_EXISTS` instead. Leading, trailing and repeated forward slashes in
+`path` are normalized; backslashes, control characters, `.` segments and `..` segments are
+rejected. The original filename must be a single path component of at most 255 characters.
 
 Delete a file by sending the `fileId` returned by the upload endpoint. A user can delete
 only a file whose `uploaded_by` value is their authenticated user id. Successful deletion
-removes the R2 object, sets `deleted_at` on the metadata record and returns `204` with no
-body. Repeating deletion for the same soft-deleted file also returns `204`.
+removes the R2 object, hard-deletes the metadata record and returns `204` with no body.
+Deletion returns `409 INVALID_STATE` while any teaching references the file. Repeating a
+successful deletion returns `404` because no tombstone record is retained.
 
 ```bash
 curl -X DELETE http://localhost:3000/v1/files \
@@ -98,7 +251,8 @@ curl -X DELETE http://localhost:3000/v1/files \
 
 ## Database
 
-Four tables: `library_users`, `library_roles`, `library_statuses`, `library_files`.
+Five tables: `library_users`, `library_roles`, `library_statuses`, `library_files`,
+`teachings`.
 `synchronize` is off, so the service never alters schema at startup. Create the file metadata
 table before using the file endpoints:
 
@@ -108,10 +262,10 @@ CREATE TABLE `library_files` (
   `uploaded_by` CHAR(36) NOT NULL,
   `storage_key` VARCHAR(255) NOT NULL,
   `file_name` VARCHAR(255) NOT NULL,
+  `url` TEXT NULL,
   `content_type` VARCHAR(255) NOT NULL,
   `size_bytes` BIGINT UNSIGNED NOT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `deleted_at` TIMESTAMP NULL DEFAULT NULL,
 
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_library_files_storage_key` (`storage_key`),
@@ -127,6 +281,16 @@ CREATE TABLE `library_files` (
 
 The database character set and collation for `library_files.uploaded_by` must be compatible
 with `library_users.id` for MySQL to create the foreign key.
+
+Existing deployments must remove the former soft-delete column after deploying application
+code that no longer reads or writes it:
+
+```sql
+ALTER TABLE `library_files` DROP COLUMN `deleted_at`;
+```
+
+This schema change is destructive. Back up the database or verify a rollback plan first, and
+do not run it while an older application instance that still queries `deleted_at` is active.
 
 `library_users.tokens_valid_from` is required and is **not** created automatically:
 
