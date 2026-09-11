@@ -21,7 +21,8 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | -------- | ------------------- | ------ | ---------------------------------------------------------------- |
 | `GET`    | `/v1`               | public | Health probe.                                                    |
 | `POST`   | `/v1/auth/register` | public | Self-signup. `role` is hardcoded to `member`.                    |
-| `POST`   | `/v1/auth/login`    | public | bcrypt password, returns `{ user, accessToken }`.                |
+| `POST`   | `/v1/auth/login`    | public | bcrypt password, returns `{ user, accessToken, refreshToken }`.  |
+| `POST`   | `/v1/auth/refresh`  | public | Rotates a refresh token and returns a new token pair.            |
 | `POST`   | `/v1/auth/logout`   | bearer | `204`, no body. Revokes by cutoff — see below.                   |
 | `GET`    | `/v1/profile`       | bearer | The caller's own account.                                        |
 | `PATCH`  | `/v1/profile`       | bearer | `name` for anyone; `role`/`status` admin-only.                   |
@@ -39,7 +40,8 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `PORT`                                            | no       | `3000`                                     |
 | `DB_HOST` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | yes      | —                                          |
 | `JWT_SECRET`                                      | **yes**  | none — the app refuses to start without it |
-| `JWT_EXPIRES_IN`                                  | no       | `7d`                                       |
+| `JWT_EXPIRES_IN`                                  | no       | `30m`                                      |
+| `REFRESH_TOKEN_EXPIRES_IN_DAYS`                   | no       | `30`                                       |
 | `BCRYPT_COST`                                     | no       | `12`                                       |
 | `CLOUDFLARE_ACCOUNT_ID`                           | **yes**  | —                                          |
 | `R2_ACCESS_KEY_ID`                                | **yes**  | —                                          |
@@ -251,8 +253,8 @@ curl -X DELETE http://localhost:3000/v1/files \
 
 ## Database
 
-Five tables: `library_users`, `library_roles`, `library_statuses`, `library_files`,
-`teachings`.
+Six tables: `library_users`, `library_auth_sessions`, `library_roles`,
+`library_statuses`, `library_files`, `teachings`.
 `synchronize` is off, so the service never alters schema at startup. Create the file metadata
 table before using the file endpoints:
 
@@ -303,6 +305,32 @@ ALTER TABLE `library_users`
 Existing rows get the `ALTER` timestamp, which invalidates every token issued before the
 migration ran — one forced re-login.
 
+Refresh-token rotation requires the session table below. Create it before deploying the
+refresh-enabled application code because `synchronize` is disabled:
+
+```sql
+CREATE TABLE `library_auth_sessions` (
+  `id` CHAR(36) NOT NULL,
+  `user_id` CHAR(36) NOT NULL,
+  `refresh_token_hash` BINARY(32) NOT NULL,
+  `expires_at` TIMESTAMP NOT NULL,
+
+  PRIMARY KEY (`id`),
+  KEY `idx_library_auth_sessions_user_id` (`user_id`),
+
+  CONSTRAINT `fk_library_auth_sessions_user_id`
+    FOREIGN KEY (`user_id`)
+    REFERENCES `library_users` (`id`)
+    ON UPDATE RESTRICT
+    ON DELETE CASCADE
+) ENGINE=InnoDB;
+```
+
+The table stores only the SHA-256 hash of each 256-bit refresh-token secret. One row is one
+device session. Rotation replaces the hash and extends `expires_at`; presenting an older
+token deletes that session. The table's `user_id` character set and collation must match
+`library_users.id`.
+
 `ROLE_IDS` and `USER_STATUS_IDS` in `constants/library.ts` hardcode the seeded reference-table
 ids (`member`=1, `admin`=2; `active`=1, `inactive`=2). Rows must be seeded to match.
 
@@ -312,10 +340,11 @@ ids (`member`=1, `admin`=2; `active`=1, `inactive`=2). Rows must be seeded to ma
 ## Auth layer
 
 `AuthModule` registers `JwtAuthGuard` as a global `APP_GUARD`, so **every route requires a
-bearer token** unless it carries `@Public()`. Exactly three handlers are public, listed in
+bearer token** unless it carries `@Public()`. Exactly four handlers are public, listed in
 `ALLOWED_PUBLIC_ROUTES` in `commons/PublicRouteAudit.ts`: `GET /v1` (probes cannot send a
-token), `POST /v1/auth/login` (locking it makes the API unreachable), and `POST
-/v1/auth/register` (self-signup). `assertNoUnexpectedPublicRoutes()` runs at bootstrap and
+token), `POST /v1/auth/login` (locking it makes the API unreachable), `POST
+/v1/auth/register` (self-signup), and `POST /v1/auth/refresh` (access tokens may already be
+expired when it is called). `assertNoUnexpectedPublicRoutes()` runs at bootstrap and
 **refuses to start** if any other route carries `@Public()` — so opening an endpoint is a
 deliberate, reviewable edit to that allowlist rather than a one-line decorator.
 
@@ -328,20 +357,26 @@ that check only avoids paying for a bcrypt hash in the common "already registere
 because the driver's index-name text differs between MariaDB (`for key 'email'`) and
 MySQL 8 (`for key 'library_users.email'`).
 
+`POST /v1/auth/refresh` accepts `{ "refreshToken": "<session-id>.<secret>" }`. A successful
+call atomically replaces the stored secret hash and returns a new `{ accessToken,
+refreshToken }` pair. The submitted refresh token cannot be used again. Mobile clients must
+serialize refresh requests so two concurrent requests do not reuse the same token.
+
 ### Logout without touching the token
 
 `POST /auth/logout` revokes by moving a line: the handler writes
 `library_users.tokens_valid_from = now`, and `JwtAuthGuard` rejects any token whose `iat`
 falls before that with `401 SESSION_REVOKED`. The token in the client is left signed,
 unexpired and byte-identical — it simply lands on the wrong side of the cutoff from the
-next request onward. The user is taken from `CurrentUser()`, so a caller can only sign
-themselves out.
+next request onward. Logout also deletes all of the user's refresh sessions. The user is
+taken from `CurrentUser()`, so a caller can only sign themselves out.
 
 Three details that are load-bearing rather than stylistic:
 
-- **Only logout writes it** (and password change, once that endpoint exists). Login must not:
-  writing it on login turns every sign-in into a global sign-out of the user's other devices.
-  The register-time default is just a floor, not a meaningful event.
+- **Logout and privilege/status changes write it** (as will password change, once that
+  endpoint exists). Login must not: writing it on login turns every sign-in into a global
+  sign-out of the user's other devices. The register-time default is just a floor, not a
+  meaningful event.
 - **The cutoff comes from the app clock**, not SQL `NOW()`. `iat` is stamped by the app, so
   taking the cutoff from the database server's clock compares two clocks and lets a few
   seconds of skew carry tokens through the logout.
@@ -349,9 +384,9 @@ Three details that are load-bearing rather than stylistic:
   millisecond-precision cutoff would outrank a token issued later in the same second and 401
   a fresh login. The trade is that a token issued in the same second as the logout survives it.
 
-The guard costs one indexed `library_users` lookup per authenticated request. That is the
-price of on-demand revocation; the alternative designs (a session table, a `jti` denylist)
-cost a lookup too, plus unbounded rows.
+The guard checks `library_users.tokens_valid_from` and the bounded session row named by the
+JWT's `sid`. Access tokens issued before refresh support have no `sid`, so deploying this
+change intentionally requires one login to establish the user's first refresh session.
 
 ## Errors
 

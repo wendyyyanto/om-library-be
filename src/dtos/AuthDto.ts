@@ -37,6 +37,13 @@ export class LoginDto {
 	password: string;
 }
 
+export class RefreshTokenDto {
+	@IsString({ message: "Refresh token is required!" })
+	@MinLength(1, { message: "Refresh token is required!" })
+	@MaxLength(255, { message: "Refresh token is invalid!" })
+	refreshToken: string;
+}
+
 export interface UserResponse {
 	id: string;
 	name: string;
@@ -44,7 +51,11 @@ export interface UserResponse {
 	role: UserRole;
 }
 
-export interface AuthResponse {
-	user: UserResponse;
+export interface TokenPairResponse {
 	accessToken: string;
+	refreshToken: string;
+}
+
+export interface AuthResponse extends TokenPairResponse {
+	user: UserResponse;
 }

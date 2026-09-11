@@ -6,6 +6,7 @@ import { IS_PUBLIC_KEY } from "./Public";
 const ALLOWED_PUBLIC_ROUTES: ReadonlySet<string> = new Set([
 	"AppController.health",
 	"AuthController.login",
+	"AuthController.refresh",
 	"AuthController.register"
 ]);
 
