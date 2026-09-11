@@ -10,6 +10,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { ERROR_CODES } from "../constants/error-codes";
 import { UserRole } from "../constants/library";
+import { AuthSessionEntity } from "../entities/AuthSessionEntity";
 import { LibraryUserEntity } from "../entities/LibraryUserEntity";
 import { AuthenticatedRequest, JwtPayload } from "./AuthTypes";
 import { IS_PUBLIC_KEY } from "./Public";
@@ -20,7 +21,9 @@ export class JwtAuthGuard implements CanActivate {
 		private readonly reflector: Reflector,
 		private readonly jwtService: JwtService,
 		@InjectRepository(LibraryUserEntity)
-		private readonly users: Repository<LibraryUserEntity>
+		private readonly users: Repository<LibraryUserEntity>,
+		@InjectRepository(AuthSessionEntity)
+		private readonly sessions: Repository<AuthSessionEntity>
 	) {}
 
 	async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -43,7 +46,12 @@ export class JwtAuthGuard implements CanActivate {
 			throw this.unauthorized();
 		}
 
-		if (!payload.sub || !Object.values(UserRole).includes(payload.role))
+		if (
+			!payload.sub ||
+			!Object.values(UserRole).includes(payload.role) ||
+			!payload.sid ||
+			typeof payload.sid !== "string"
+		)
 			throw this.unauthorized();
 
 		if (await this.isRevoked(payload)) throw this.sessionRevoked();
@@ -62,7 +70,13 @@ export class JwtAuthGuard implements CanActivate {
 		if (!user) return true;
 
 		const validFrom = Math.floor(user.tokensValidFrom.getTime() / 1000);
-		return payload.iat < validFrom;
+		if (payload.iat < validFrom) return true;
+
+		const session = await this.sessions.findOne({
+			where: { id: payload.sid, userId: payload.sub },
+			select: { id: true, expiresAt: true }
+		});
+		return !session || session.expiresAt.getTime() <= Date.now();
 	}
 
 	private extractToken(request: AuthenticatedRequest): string | null {

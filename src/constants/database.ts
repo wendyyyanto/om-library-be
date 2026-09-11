@@ -1,3 +1,4 @@
+import { AuthSessionEntity } from "../entities/AuthSessionEntity";
 import { LibraryFileEntity } from "../entities/LibraryFileEntity";
 import { LibraryRoleEntity } from "../entities/LibraryRoleEntity";
 import { LibraryStatusEntity } from "../entities/LibraryStatusEntity";
@@ -6,6 +7,7 @@ import { TeachingEntity } from "../entities/TeachingEntity";
 
 export const DATABASE_ENTITIES = [
 	LibraryUserEntity,
+	AuthSessionEntity,
 	LibraryFileEntity,
 	LibraryRoleEntity,
 	LibraryStatusEntity,

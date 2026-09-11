@@ -11,6 +11,8 @@ export interface AuthenticatedUser {
 export interface JwtPayload {
   sub: string;
   role: UserRole;
+  /** Identifies the server-side refresh session that issued this access token. */
+  sid: string;
   iat?: number;
   exp?: number;
 }

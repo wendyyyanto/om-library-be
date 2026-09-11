@@ -17,13 +17,16 @@ import {
 	UserStatus
 } from "../constants/library";
 import { ProfileResponse, UpdateProfileDto } from "../dtos/ProfileDto";
+import { AuthSessionEntity } from "../entities/AuthSessionEntity";
 import { LibraryUserEntity } from "../entities/LibraryUserEntity";
+import { TransactionRunner } from "../utilities/TransactionRunner";
 
 @Injectable()
 export class ProfileService {
 	constructor(
 		@InjectRepository(LibraryUserEntity)
-		private readonly users: Repository<LibraryUserEntity>
+		private readonly users: Repository<LibraryUserEntity>,
+		private readonly transactions: TransactionRunner
 	) {}
 
 	async getProfile(userId: string): Promise<ProfileResponse> {
@@ -55,12 +58,24 @@ export class ProfileService {
 		const user = await this.users.findOne({ where: { id: actor.id } });
 		if (!user) throw this.userNotFound();
 
-		if (this.changesPrivilege(patch, user))
+		const privilegeChanged = this.changesPrivilege(patch, user);
+		if (privilegeChanged)
 			patch.tokensValidFrom = new Date(
 				Math.floor(Date.now() / 1000) * 1000
 			);
 
-		await this.users.update({ id: user.id }, patch);
+		if (privilegeChanged) {
+			await this.transactions.run(async (manager) => {
+				await manager
+					.getRepository(LibraryUserEntity)
+					.update({ id: user.id }, patch);
+				await manager
+					.getRepository(AuthSessionEntity)
+					.delete({ userId: user.id });
+			});
+		} else {
+			await this.users.update({ id: user.id }, patch);
+		}
 
 		return this.toProfileResponse({ ...user, ...patch });
 	}

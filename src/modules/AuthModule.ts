@@ -7,13 +7,14 @@ import type * as jwt from "jsonwebtoken";
 import { JwtAuthGuard } from "../commons/JwtAuthGuard";
 import { RolesGuard } from "../commons/RolesGuard";
 import { AuthController } from "../controllers/AuthController";
+import { AuthSessionEntity } from "../entities/AuthSessionEntity";
 import { LibraryUserEntity } from "../entities/LibraryUserEntity";
 import { AuthService } from "../services/AuthService";
 import { PasswordHasher } from "../utilities/PasswordHasher";
 @Global()
 @Module({
 	imports: [
-		TypeOrmModule.forFeature([LibraryUserEntity]),
+		TypeOrmModule.forFeature([LibraryUserEntity, AuthSessionEntity]),
 		JwtModule.registerAsync({
 			inject: [ConfigService],
 			useFactory: (config: ConfigService): JwtModuleOptions => {
@@ -26,7 +27,7 @@ import { PasswordHasher } from "../utilities/PasswordHasher";
 					secret,
 					signOptions: {
 						expiresIn: (config.get<string>("JWT_EXPIRES_IN") ??
-							"7d") as jwt.SignOptions["expiresIn"]
+							"30m") as jwt.SignOptions["expiresIn"]
 					}
 				};
 			}
