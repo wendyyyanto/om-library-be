@@ -68,7 +68,10 @@ fields used by the list view and returns snake-case response keys:
 			"category": "Topical Teaching",
 			"teacher": "John Doe",
 			"date": "2026-08-17T00:00:00.000Z",
-			"uploaded_by": "66e76a86-9507-4b52-a2d6-f9bd7d58a68a"
+			"uploaded_by": {
+				"id": "66e76a86-9507-4b52-a2d6-f9bd7d58a68a",
+				"name": "Jane Doe"
+			}
 		}
 	],
 	"pagination": {
@@ -125,7 +128,10 @@ internal storage keys and file ownership are not exposed:
 		"ppt_file": null,
 		"created_at": "2026-08-17T00:00:00.000Z",
 		"updated_at": "2026-08-17T00:00:00.000Z",
-		"uploaded_by": "66e76a86-9507-4b52-a2d6-f9bd7d58a68a"
+		"uploaded_by": {
+			"id": "66e76a86-9507-4b52-a2d6-f9bd7d58a68a",
+			"name": "Jane Doe"
+		}
 	}
 }
 ```

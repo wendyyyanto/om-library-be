@@ -159,13 +159,18 @@ export class CreateTeachingDto {
 	ppt_file_id?: string | null;
 }
 
+export interface TeachingUploaderResponse {
+	id: string;
+	name: string;
+}
+
 export interface TeachingListItemResponse {
 	id: string;
 	title: string;
 	category: TeachingCategory;
 	teacher: string;
 	date: string;
-	uploaded_by: string;
+	uploaded_by: TeachingUploaderResponse;
 }
 
 export interface TeachingsPaginationResponse {
@@ -203,7 +208,7 @@ export interface TeachingDetailDataResponse {
 	ppt_file: TeachingFileResponse | null;
 	created_at: string;
 	updated_at: string;
-	uploaded_by: string;
+	uploaded_by: TeachingUploaderResponse;
 }
 
 export interface TeachingDetailResponse {
