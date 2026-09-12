@@ -87,8 +87,12 @@ export class TeachingsService {
 				category: true,
 				teacher: true,
 				createdAt: true,
-				uploadedBy: true
+				uploader: {
+					id: true,
+					name: true
+				}
 			},
+			relations: { uploader: true },
 			order: { createdAt: "DESC", id: "DESC" },
 			skip: (page - 1) * limit,
 			take: limit
@@ -111,6 +115,7 @@ export class TeachingsService {
 			.leftJoinAndSelect("teaching.audioFile", "audioFile")
 			.leftJoinAndSelect("teaching.pdfFile", "pdfFile")
 			.leftJoinAndSelect("teaching.pptFile", "pptFile")
+			.leftJoinAndSelect("teaching.uploader", "uploader")
 			.select([
 				"teaching.id",
 				"teaching.title",
@@ -123,7 +128,8 @@ export class TeachingsService {
 				"teaching.videoUrl",
 				"teaching.createdAt",
 				"teaching.updatedAt",
-				"teaching.uploadedBy",
+				"uploader.id",
+				"uploader.name",
 				"audioFile.id",
 				"audioFile.fileName",
 				"audioFile.contentType",
@@ -257,7 +263,10 @@ export class TeachingsService {
 			category: teaching.category,
 			teacher: teaching.teacher,
 			date: teaching.createdAt.toISOString(),
-			uploaded_by: teaching.uploadedBy
+			uploaded_by: {
+				id: teaching.uploader.id,
+				name: teaching.uploader.name
+			}
 		};
 	}
 
@@ -279,7 +288,10 @@ export class TeachingsService {
 			ppt_file: this.toFileResponse(teaching.pptFile),
 			created_at: teaching.createdAt.toISOString(),
 			updated_at: teaching.updatedAt.toISOString(),
-			uploaded_by: teaching.uploadedBy
+			uploaded_by: {
+				id: teaching.uploader.id,
+				name: teaching.uploader.name
+			}
 		};
 	}
 
