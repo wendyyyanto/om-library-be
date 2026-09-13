@@ -7,6 +7,7 @@ import {
 	HttpStatus,
 	Param,
 	Post,
+	Put,
 	Query,
 	UseFilters
 } from "@nestjs/common";
@@ -18,7 +19,8 @@ import {
 	GetTeachingParamsDto,
 	GetTeachingsQueryDto,
 	TeachingDetailResponse,
-	TeachingsListResponse
+	TeachingsListResponse,
+	UpdateTeachingDto
 } from "../dtos/TeachingDto";
 import { TeachingsService } from "../services/TeachingsService";
 
@@ -50,6 +52,16 @@ export class TeachingsController {
 		@Param() params: GetTeachingParamsDto
 	): Promise<TeachingDetailResponse> {
 		return this.teachingsService.getById(params.id);
+	}
+
+	@Put(":id")
+	@HttpCode(HttpStatus.OK)
+	async update(
+		@CurrentUser("id") userId: string,
+		@Param() params: GetTeachingParamsDto,
+		@Body() dto: UpdateTeachingDto
+	): Promise<TeachingDetailResponse> {
+		return this.teachingsService.update(userId, params.id, dto);
 	}
 
 	@Delete(":id")

@@ -116,9 +116,24 @@ export class FilesService {
 	}
 
 	async delete(userId: string, fileId: string): Promise<void> {
+		await this.deleteFile(userId, fileId, false);
+	}
+
+	async deleteIfUnreferenced(
+		userId: string,
+		fileId: string
+	): Promise<boolean> {
+		return this.deleteFile(userId, fileId, true);
+	}
+
+	private async deleteFile(
+		userId: string,
+		fileId: string,
+		skipUnavailable: boolean
+	): Promise<boolean> {
 		let storageObjectDeleted = false;
 		try {
-			await this.transactions.run(async (manager) => {
+			return await this.transactions.run(async (manager) => {
 				const files = manager.getRepository(LibraryFileEntity);
 				const file = await files
 					.createQueryBuilder("file")
@@ -127,16 +142,25 @@ export class FilesService {
 					.setLock("pessimistic_write")
 					.getOne();
 
-				if (!file) throw this.fileNotFound();
-				if (file.uploadedBy !== userId) throw this.forbidden();
-				if (await this.isReferencedByTeaching(manager, file.id))
+				if (!file) {
+					if (skipUnavailable) return false;
+					throw this.fileNotFound();
+				}
+				if (file.uploadedBy !== userId) {
+					if (skipUnavailable) return false;
+					throw this.forbidden();
+				}
+				if (await this.isReferencedByTeaching(manager, file.id)) {
+					if (skipUnavailable) return false;
 					throw this.fileInUse();
+				}
 
 				await this.deleteStoredObject(file.storageKey);
 				storageObjectDeleted = true;
 				const result = await files.delete({ id: file.id, uploadedBy: userId });
 				if (result.affected !== 1)
 					throw new Error("The locked file row could not be deleted.");
+				return true;
 			});
 		} catch (error) {
 			if (storageObjectDeleted)
