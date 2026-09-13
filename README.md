@@ -29,6 +29,7 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `GET`    | `/v1/teachings`     | bearer | Paginated teaching list, newest first.                           |
 | `GET`    | `/v1/teachings/:id` | bearer | Teaching detail with file metadata.                              |
 | `POST`   | `/v1/teachings`     | bearer | Create a teaching owned by the caller.                           |
+| `PUT`    | `/v1/teachings/:id` | bearer | Replace an owned teaching's complete editable representation.    |
 | `DELETE` | `/v1/teachings/:id` | bearer | Hard-delete an owned teaching and its unshared files.            |
 | `POST`   | `/v1/files`         | bearer | Upload one `multipart/form-data` field named `file` to R2.       |
 | `DELETE` | `/v1/files`         | bearer | Delete the caller's uploaded file using `{ "file_id": "UUID" }`. |
@@ -185,6 +186,43 @@ If both `audio_file_id` and `video_url` are omitted, `null` or blank, the endpoi
 	"errors": ["At least one of audio_file_id or video_url is required!"]
 }
 ```
+
+`PUT /v1/teachings/:id` replaces the complete editable representation of a teaching owned
+by the authenticated caller. All fields shown in the create example must be present. The
+four media fields must also be present, but each may be `null`; server-managed fields such
+as `id`, `created_at`, `updated_at` and `uploaded_by` are rejected. The resulting teaching
+must still contain at least one of `audio_file_id` or `video_url`.
+
+To replace a teaching file, first upload the new object through `POST /v1/files`, then put
+the returned `fileId` in the complete teaching payload. Keep the current id when a file is
+unchanged, or send `null` to remove it:
+
+```json
+{
+	"title": "Living by Faith — Revised",
+	"passage": "Romans 1:16-17",
+	"chapters": "1",
+	"category": "New Testament",
+	"year": "2026",
+	"teacher": "John Doe",
+	"event": "Sunday Ministry",
+	"audio_file_id": "5e65be73-76ec-4599-b5ef-13af44674af8",
+	"video_url": null,
+	"pdf_file_id": "c96d934f-2154-4fea-bf0d-a97f519863f7",
+	"ppt_file_id": null
+}
+```
+
+The submitted file ids must exist and belong to the caller. After the database update
+commits, an old file replaced or removed by this teaching is deleted from R2 and
+`library_files` when no teaching still references it. Shared files are retained. The
+response is `200 OK` and uses the same detailed representation as
+`GET /v1/teachings/:id`.
+
+Because R2 and MySQL cannot commit atomically, a failed post-commit R2 cleanup does not roll
+back an otherwise valid teaching update. The failure is logged for reconciliation and the
+now-unreferenced object is retained. If the new upload succeeds but the PUT fails, the
+client should delete that unreferenced upload through `DELETE /v1/files`.
 
 `DELETE /v1/teachings/:id` hard-deletes a teaching owned by the authenticated caller. The
 service obtains the audio, PDF and presentation storage keys from `library_files`; clients

@@ -1,9 +1,11 @@
 import { Transform } from "class-transformer";
 import {
+	IsDefined,
 	IsEnum,
 	IsOptional,
 	IsUrl,
 	IsUUID,
+	ValidateIf,
 	ValidateBy,
 	ValidationArguments,
 	ValidationOptions
@@ -157,6 +159,71 @@ export class CreateTeachingDto {
 	@Transform(({ value }) => trimOptional(value))
 	@IsUUID("4", { message: "PPT file ID must be a valid UUID!" })
 	ppt_file_id?: string | null;
+}
+
+export class UpdateTeachingDto {
+	@Transform(({ value }) => trim(value))
+	@IsRequiredString("Title", 255)
+	title: string;
+
+	@Transform(({ value }) => trim(value))
+	@IsRequiredString("Passage", 255)
+	passage: string;
+
+	@Transform(({ value }) => trim(value))
+	@IsRequiredString("Chapters", 255)
+	chapters: string;
+
+	@Transform(({ value }) => trim(value))
+	@IsEnum(TeachingCategory, { message: CATEGORY_MESSAGE })
+	category: TeachingCategory;
+
+	@Transform(({ value }) => trim(value))
+	@IsRequiredString("Year", 32)
+	year: string;
+
+	@Transform(({ value }) => trim(value))
+	@IsRequiredString("Teacher", 255)
+	teacher: string;
+
+	@Transform(({ value }) => trim(value))
+	@IsRequiredString("Event", 255)
+	event: string;
+
+	@IsDefined({
+		message: "Audio file ID is required; use null when no audio file is attached!"
+	})
+	@ValidateIf((_object, value) => value !== null)
+	@Transform(({ value }) => trim(value))
+	@IsUUID("4", { message: "Audio file ID must be a valid UUID!" })
+	audio_file_id: string | null;
+
+	@IsDefined({
+		message: "Video URL is required; use null when no video URL is attached!"
+	})
+	@ValidateIf((_object, value) => value !== null)
+	@Transform(({ value }) => trim(value))
+	@IsUrl(
+		{ protocols: ["http", "https"], require_protocol: true, require_tld: false },
+		{ message: "Video URL must be a valid HTTP or HTTPS URL!" }
+	)
+	video_url: string | null;
+
+	@IsDefined({
+		message: "PDF file ID is required; use null when no PDF file is attached!"
+	})
+	@ValidateIf((_object, value) => value !== null)
+	@Transform(({ value }) => trim(value))
+	@IsUUID("4", { message: "PDF file ID must be a valid UUID!" })
+	pdf_file_id: string | null;
+
+	@IsDefined({
+		message: "PPT file ID is required; use null when no PPT file is attached!"
+	})
+	@ValidateIf((_object, value) => value !== null)
+	@Transform(({ value }) => trim(value))
+	@IsUUID("4", { message: "PPT file ID must be a valid UUID!" })
+	ppt_file_id: string | null;
 }
 
 export interface TeachingUploaderResponse {

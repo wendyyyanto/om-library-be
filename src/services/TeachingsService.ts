@@ -23,7 +23,8 @@ import {
 	TeachingDetailResponse,
 	TeachingFileResponse,
 	TeachingListItemResponse,
-	TeachingsListResponse
+	TeachingsListResponse,
+	UpdateTeachingDto
 } from "../dtos/TeachingDto";
 import { LibraryFileEntity } from "../entities/LibraryFileEntity";
 import { TeachingEntity } from "../entities/TeachingEntity";
@@ -154,6 +155,103 @@ export class TeachingsService {
 		return { data: this.toDetailResponse(teaching) };
 	}
 
+	async update(
+		userId: string,
+		id: string,
+		dto: UpdateTeachingDto
+	): Promise<TeachingDetailResponse> {
+		const detachedFileIds = await this.transactions.run(async (manager) => {
+			const teachings = manager.getRepository(TeachingEntity);
+			const teaching = await teachings
+				.createQueryBuilder("teaching")
+				.where("teaching.id = :id", { id })
+				.setLock("pessimistic_write")
+				.getOne();
+
+			if (!teaching) throw this.teachingNotFound();
+			if (teaching.uploadedBy !== userId) throw this.forbidden("update");
+			if (!dto.audio_file_id && !dto.video_url)
+				throw new BadRequestException({
+					statusCode: HttpStatus.BAD_REQUEST,
+					code: ERROR_CODES.VALIDATION_FAILED,
+					message: TEACHING_MEDIA_REQUIRED_MESSAGE,
+					errors: [TEACHING_MEDIA_REQUIRED_MESSAGE]
+				});
+
+			const nextFileIds = [
+				...new Set(
+					[dto.audio_file_id, dto.pdf_file_id, dto.ppt_file_id].filter(
+						(fileId): fileId is string => fileId !== null
+					)
+				)
+			];
+
+			if (nextFileIds.length > 0) {
+				const files = await manager
+					.getRepository(LibraryFileEntity)
+					.createQueryBuilder("file")
+					.select(["file.id", "file.uploadedBy"])
+					.where("file.id IN (:...fileIds)", { fileIds: nextFileIds })
+					.orderBy("file.id", "ASC")
+					.setLock("pessimistic_write")
+					.getMany();
+
+				if (files.length !== nextFileIds.length)
+					throw this.invalidFileState(
+						"One or more teaching files do not exist."
+					);
+				if (files.some((file) => file.uploadedBy !== userId))
+					throw this.invalidFileState(
+						"One or more teaching files belong to another user."
+					);
+			}
+
+			const previousFileIds = [
+				...new Set(
+					[
+						teaching.audioFileId,
+						teaching.pdfFileId,
+						teaching.pptFileId
+					].filter((fileId): fileId is string => fileId !== null)
+				)
+			];
+			const nextFileIdSet = new Set(nextFileIds);
+
+			const result = await teachings.update(
+				{ id },
+				{
+					title: dto.title,
+					passage: dto.passage,
+					chapters: dto.chapters,
+					category: dto.category,
+					year: dto.year,
+					teacher: dto.teacher,
+					event: dto.event,
+					audioFileId: dto.audio_file_id,
+					videoUrl: dto.video_url,
+					pdfFileId: dto.pdf_file_id,
+					pptFileId: dto.ppt_file_id
+				}
+			);
+			if (result.affected !== 1)
+				throw new Error("The locked teaching row could not be updated.");
+
+			return previousFileIds.filter((fileId) => !nextFileIdSet.has(fileId));
+		});
+
+		for (const fileId of detachedFileIds) {
+			try {
+				await this.filesService.deleteIfUnreferenced(userId, fileId);
+			} catch (error) {
+				this.logger.error(
+					`Teaching ${id} was updated, but detached file ${fileId} needs cleanup (${this.errorName(error)}).`
+				);
+			}
+		}
+
+		return this.getById(id);
+	}
+
 	async delete(userId: string, id: string): Promise<void> {
 		const deletedStorageFileIds = new Set<string>();
 		try {
@@ -173,7 +271,7 @@ export class TeachingsService {
 					.getOne();
 
 				if (!teaching) throw this.teachingNotFound();
-				if (teaching.uploadedBy !== userId) throw this.forbidden();
+				if (teaching.uploadedBy !== userId) throw this.forbidden("delete");
 
 				const fileIds = [
 					...new Set(
@@ -339,12 +437,16 @@ export class TeachingsService {
 		});
 	}
 
-	private forbidden(): ForbiddenException {
+	private forbidden(action: "delete" | "update"): ForbiddenException {
 		return new ForbiddenException({
 			statusCode: HttpStatus.FORBIDDEN,
 			code: ERROR_CODES.FORBIDDEN,
-			message: "You do not have permission to delete this teaching."
+			message: `You do not have permission to ${action} this teaching.`
 		});
+	}
+
+	private errorName(error: unknown): string {
+		return error instanceof Error ? error.name : "unknown error";
 	}
 
 	private invalidFileState(message: string): ConflictException {

@@ -32,9 +32,11 @@ export class SnakeCaseExceptionFilter implements ExceptionFilter {
 				? "The teaching could not be deleted."
 				: request.method === "POST"
 					? "The teaching could not be created."
-					: isDetailRequest
-						? "The teaching could not be retrieved."
-						: "The teachings could not be retrieved.";
+					: request.method === "PUT"
+						? "The teaching could not be updated."
+						: isDetailRequest
+							? "The teaching could not be retrieved."
+							: "The teachings could not be retrieved.";
 
 		if (exception instanceof QueryFailedError) {
 			this.logger.error("A teachings database query failed.");
