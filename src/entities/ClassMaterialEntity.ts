@@ -1,0 +1,49 @@
+import {
+	Check,
+	Column,
+	CreateDateColumn,
+	Entity,
+	Index,
+	JoinColumn,
+	ManyToOne,
+	PrimaryGeneratedColumn,
+	UpdateDateColumn
+} from "typeorm";
+import { ClassEntity } from "./ClassEntity";
+
+@Entity({ name: "class_materials" })
+@Index("idx_class_materials_class_week", ["classId", "weekNumber"])
+@Check("chk_class_materials_week_number", "week_number > 0")
+export class ClassMaterialEntity {
+	@PrimaryGeneratedColumn({ type: "int", unsigned: true })
+	id: number;
+
+	@Column({ name: "class_id", type: "int", unsigned: true })
+	classId: number;
+
+	@ManyToOne(() => ClassEntity, {
+		nullable: false,
+		onUpdate: "RESTRICT",
+		onDelete: "CASCADE"
+	})
+	@JoinColumn({
+		name: "class_id",
+		foreignKeyConstraintName: "fk_class_materials_class"
+	})
+	class: ClassEntity;
+
+	@Column({ type: "varchar", length: 255 })
+	title: string;
+
+	@Column({ type: "text", nullable: true })
+	description: string | null;
+
+	@Column({ name: "week_number", type: "int", unsigned: true })
+	weekNumber: number;
+
+	@CreateDateColumn({ name: "created_at", type: "timestamp" })
+	createdAt: Date;
+
+	@UpdateDateColumn({ name: "updated_at", type: "timestamp" })
+	updatedAt: Date;
+}
