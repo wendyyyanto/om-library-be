@@ -245,6 +245,115 @@ committing its database deletes, so a later database failure can leave an object
 its metadata remains. A durable deletion outbox with retries is required if guaranteed
 cross-system recovery becomes a requirement.
 
+## Classes
+
+`POST /v1/class` creates class metadata for the authenticated caller. The category id must
+reference an existing `class_categories` row. The server derives `uploaded_by` from the
+access token and generates the numeric id and timestamps.
+
+```json
+{
+	"title": "Foundations of Faith",
+	"description": "A twelve-week introductory class.",
+	"total_weeks": 12,
+	"class_category_id": 3
+}
+```
+
+Success returns `201 Created` with the resolved category and uploader:
+
+```json
+{
+	"data": {
+		"id": 41,
+		"title": "Foundations of Faith",
+		"description": "A twelve-week introductory class.",
+		"total_weeks": 12,
+		"class_category": {
+			"id": 3,
+			"label": "Discipleship"
+		},
+		"created_at": "2026-09-15T08:30:00.000Z",
+		"updated_at": "2026-09-15T08:30:00.000Z",
+		"uploaded_by": {
+			"id": "66e76a86-9507-4b52-a2d6-f9bd7d58a68a",
+			"name": "Jane Doe"
+		}
+	}
+}
+```
+
+`title` and `class_category_id` are required. `total_weeks` may be omitted or `null`, but
+when present it must be a positive integer. Class materials are separate records and are
+not created by this endpoint.
+
+## Ebooks
+
+`POST /v1/ebook` creates an ebook and its tag links in one transaction. Upload the cover
+and ebook through `POST /v1/files` first, then submit their returned ids. Both files must
+exist and belong to the authenticated caller. The ebook file must be PDF or EPUB; an
+optional cover must be JPEG, PNG or WebP.
+
+```json
+{
+	"title": "Knowing God",
+	"author": "J. I. Packer",
+	"language": "en",
+	"total_pages": 288,
+	"cover_file_id": "319b925f-48c6-4e4d-9ee7-a114eacf0b63",
+	"ebook_file_id": "c96d934f-2154-4fea-bf0d-a97f519863f7",
+	"overview": "An introduction to the character and attributes of God.",
+	"tag_ids": [1, 4]
+}
+```
+
+Success returns `201 Created`:
+
+```json
+{
+	"data": {
+		"id": 73,
+		"title": "Knowing God",
+		"author": "J. I. Packer",
+		"language": "en",
+		"total_pages": 288,
+		"overview": "An introduction to the character and attributes of God.",
+		"cover_file": {
+			"id": "319b925f-48c6-4e4d-9ee7-a114eacf0b63",
+			"file_name": "knowing-god.webp",
+			"content_type": "image/webp",
+			"size_bytes": 142830,
+			"url": "https://assets.organic-ministry.org/ebooks/covers/knowing-god.webp"
+		},
+		"ebook_file": {
+			"id": "c96d934f-2154-4fea-bf0d-a97f519863f7",
+			"file_name": "knowing-god.pdf",
+			"content_type": "application/pdf",
+			"size_bytes": 4218630,
+			"url": "https://assets.organic-ministry.org/ebooks/knowing-god.pdf"
+		},
+		"tags": [
+			{
+				"id": 1,
+				"label": "Theology"
+			}
+		],
+		"created_at": "2026-09-15T08:35:00.000Z",
+		"updated_at": "2026-09-15T08:35:00.000Z",
+		"uploaded_by": {
+			"id": "66e76a86-9507-4b52-a2d6-f9bd7d58a68a",
+			"name": "Jane Doe"
+		}
+	}
+}
+```
+
+`title`, `author`, `language` and `ebook_file_id` are required. `total_pages` must be a
+positive integer when present. `tag_ids` defaults to an empty list, must not contain
+duplicates, and every id must reference an existing `ebook_tags` row. An attached ebook
+or class-material file cannot be deleted through `DELETE /v1/files` while it remains in
+use.
+
 ## File uploads
 
 `POST /v1/files` accepts exactly one in-memory multipart file in the `file` field and an
