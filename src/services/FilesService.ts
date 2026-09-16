@@ -19,6 +19,8 @@ import { randomUUID } from "node:crypto";
 import { EntityManager, Repository } from "typeorm";
 import { ERROR_CODES } from "../constants/error-codes";
 import { FileUploadResponse } from "../dtos/FileDto";
+import { ClassMaterialFileEntity } from "../entities/ClassMaterialFileEntity";
+import { EbookEntity } from "../entities/EbookEntity";
 import { LibraryFileEntity } from "../entities/LibraryFileEntity";
 import { TeachingEntity } from "../entities/TeachingEntity";
 import { TransactionRunner } from "../utilities/TransactionRunner";
@@ -150,7 +152,7 @@ export class FilesService {
 					if (skipUnavailable) return false;
 					throw this.forbidden();
 				}
-				if (await this.isReferencedByTeaching(manager, file.id)) {
+				if (await this.isReferenced(manager, file.id)) {
 					if (skipUnavailable) return false;
 					throw this.fileInUse();
 				}
@@ -283,15 +285,15 @@ export class FilesService {
 		return new ConflictException({
 			statusCode: HttpStatus.CONFLICT,
 			code: ERROR_CODES.INVALID_STATE,
-			message: "The file is still used by a teaching."
+			message: "The file is still in use."
 		});
 	}
 
-	private async isReferencedByTeaching(
+	private async isReferenced(
 		manager: EntityManager,
 		fileId: string
 	): Promise<boolean> {
-		return manager
+		const teachingReference = await manager
 			.getRepository(TeachingEntity)
 			.createQueryBuilder("teaching")
 			.where(
@@ -299,6 +301,21 @@ export class FilesService {
 				{ fileId }
 			)
 			.getExists();
+		if (teachingReference) return true;
+
+		const ebookReference = await manager
+			.getRepository(EbookEntity)
+			.createQueryBuilder("ebook")
+			.where(
+				"ebook.coverFileId = :fileId OR ebook.ebookFileId = :fileId",
+				{ fileId }
+			)
+			.getExists();
+		if (ebookReference) return true;
+
+		return manager
+			.getRepository(ClassMaterialFileEntity)
+			.existsBy({ fileId });
 	}
 
 	private async removeOrphanedUpload(
