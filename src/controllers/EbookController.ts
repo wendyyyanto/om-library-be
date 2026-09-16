@@ -1,18 +1,73 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from "@nestjs/common";
+import {
+	Body,
+	Controller,
+	Delete,
+	Get,
+	HttpCode,
+	HttpStatus,
+	Param,
+	Post,
+	Put,
+	Query
+} from "@nestjs/common";
 import { CurrentUser } from "../commons/CurrentUser";
-import { CreateEbookDto, CreateEbookResponse } from "../dtos/EbookDto";
+import {
+	CreateEbookDto,
+	CreateEbookResponse,
+	EbookDetailResponse,
+	EbooksListResponse,
+	GetEbookParamsDto,
+	UpdateEbookDto,
+	UpdateEbookResponse
+} from "../dtos/EbookDto";
+import { GetPaginationQueryDto } from "../dtos/PaginationDto";
 import { EbookService } from "../services/EbookService";
 
-@Controller("ebook")
+@Controller()
 export class EbookController {
 	constructor(private readonly ebookService: EbookService) {}
 
-	@Post()
+	@Post("ebook")
 	@HttpCode(HttpStatus.CREATED)
 	async create(
 		@CurrentUser("id") userId: string,
 		@Body() dto: CreateEbookDto
 	): Promise<CreateEbookResponse> {
 		return this.ebookService.create(userId, dto);
+	}
+
+	@Get("ebooks")
+	@HttpCode(HttpStatus.OK)
+	async list(
+		@Query() query: GetPaginationQueryDto
+	): Promise<EbooksListResponse> {
+		return this.ebookService.list(query);
+	}
+
+	@Get("ebook/:id")
+	@HttpCode(HttpStatus.OK)
+	async getById(
+		@Param() params: GetEbookParamsDto
+	): Promise<EbookDetailResponse> {
+		return this.ebookService.getById(params.id);
+	}
+
+	@Put("ebook/:id")
+	@HttpCode(HttpStatus.OK)
+	async update(
+		@CurrentUser("id") userId: string,
+		@Param() params: GetEbookParamsDto,
+		@Body() dto: UpdateEbookDto
+	): Promise<UpdateEbookResponse> {
+		return this.ebookService.update(userId, params.id, dto);
+	}
+
+	@Delete("ebook/:id")
+	@HttpCode(HttpStatus.NO_CONTENT)
+	async delete(
+		@CurrentUser("id") userId: string,
+		@Param() params: GetEbookParamsDto
+	): Promise<void> {
+		return this.ebookService.delete(userId, params.id);
 	}
 }

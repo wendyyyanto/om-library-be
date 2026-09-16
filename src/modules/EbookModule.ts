@@ -6,6 +6,7 @@ import { EbookTagEntity } from "../entities/EbookTagEntity";
 import { EbookTagLinkEntity } from "../entities/EbookTagLinkEntity";
 import { LibraryFileEntity } from "../entities/LibraryFileEntity";
 import { EbookService } from "../services/EbookService";
+import { FilesModule } from "./FilesModule";
 
 @Module({
 	imports: [
@@ -14,7 +15,8 @@ import { EbookService } from "../services/EbookService";
 			EbookTagEntity,
 			EbookTagLinkEntity,
 			LibraryFileEntity
-		])
+		]),
+		FilesModule
 	],
 	controllers: [EbookController],
 	providers: [EbookService]

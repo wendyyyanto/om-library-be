@@ -13,7 +13,10 @@ import { ClassEntity } from "./ClassEntity";
 
 @Entity({ name: "class_materials" })
 @Index("idx_class_materials_class_week", ["classId", "weekNumber"])
-@Check("chk_class_materials_week_number", "week_number > 0")
+@Check(
+	"chk_class_materials_week_number",
+	"week_number IS NULL OR week_number > 0"
+)
 export class ClassMaterialEntity {
 	@PrimaryGeneratedColumn({ type: "int", unsigned: true })
 	id: number;
@@ -38,8 +41,8 @@ export class ClassMaterialEntity {
 	@Column({ type: "text", nullable: true })
 	description: string | null;
 
-	@Column({ name: "week_number", type: "int", unsigned: true })
-	weekNumber: number;
+	@Column({ name: "week_number", type: "int", unsigned: true, nullable: true })
+	weekNumber: number | null;
 
 	@CreateDateColumn({ name: "created_at", type: "timestamp" })
 	createdAt: Date;
