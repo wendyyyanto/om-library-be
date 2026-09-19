@@ -5,8 +5,14 @@ import { EbookTagEntity } from "./EbookTagEntity";
 @Entity({ name: "ebook_tag_links" })
 @Index("idx_ebook_tag_links_tag_id", ["tagId"])
 export class EbookTagLinkEntity {
-	@PrimaryColumn({ name: "ebook_id", type: "int", unsigned: true })
-	ebookId: number;
+	@PrimaryColumn({
+		name: "ebook_id",
+		type: "char",
+		length: 36,
+		charset: "utf8mb3",
+		collation: "utf8mb3_general_ci"
+	})
+	ebookId: string;
 
 	@ManyToOne(() => EbookEntity, {
 		nullable: false,

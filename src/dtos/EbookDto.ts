@@ -1,6 +1,7 @@
 import { Transform } from "class-transformer";
 import {
 	IsDefined,
+	ArrayNotEmpty,
 	ArrayUnique,
 	IsArray,
 	IsInt,
@@ -19,12 +20,8 @@ function trim(value: unknown): unknown {
 }
 
 export class GetEbookParamsDto {
-	@Transform(({ value }) =>
-		typeof value === "string" ? Number(value) : value
-	)
-	@IsInt({ message: "Ebook ID must be a positive integer!" })
-	@Min(1, { message: "Ebook ID must be a positive integer!" })
-	id: number;
+	@IsUUID(undefined, { message: "Ebook ID must be a valid UUID!" })
+	id: string;
 }
 
 export class CreateEbookDto {
@@ -63,15 +60,15 @@ export class CreateEbookDto {
 	@IsString({ message: "Overview must be text!" })
 	overview?: string | null;
 
-	@IsOptional()
 	@IsArray({ message: "Tag IDs must be an array!" })
+	@ArrayNotEmpty({ message: "At least one tag ID is required!" })
 	@ArrayUnique({ message: "Tag IDs must not contain duplicates!" })
 	@IsInt({ each: true, message: "Every tag ID must be a positive integer!" })
 	@Min(1, {
 		each: true,
 		message: "Every tag ID must be a positive integer!"
 	})
-	tag_ids?: number[];
+	tag_ids: number[];
 }
 
 export class UpdateEbookDto {
@@ -120,6 +117,7 @@ export class UpdateEbookDto {
 	overview: string | null;
 
 	@IsArray({ message: "Tag IDs must be an array!" })
+	@ArrayNotEmpty({ message: "At least one tag ID is required!" })
 	@ArrayUnique({ message: "Tag IDs must not contain duplicates!" })
 	@IsInt({ each: true, message: "Every tag ID must be a positive integer!" })
 	@Min(1, {
@@ -148,7 +146,7 @@ export interface EbookUploaderResponse {
 }
 
 export interface CreatedEbookResponse {
-	id: number;
+	id: string;
 	title: string;
 	author: string;
 	language: string;
@@ -167,7 +165,7 @@ export interface CreateEbookResponse {
 }
 
 export interface EbookListItemResponse {
-	id: number;
+	id: string;
 	title: string;
 	author: string;
 	tags: EbookTagResponse[];
