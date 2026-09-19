@@ -6,7 +6,7 @@ import {
 	Index,
 	JoinColumn,
 	ManyToOne,
-	PrimaryGeneratedColumn,
+	PrimaryColumn,
 	UpdateDateColumn
 } from "typeorm";
 import { LibraryFileEntity } from "./LibraryFileEntity";
@@ -18,8 +18,13 @@ import { LibraryUserEntity } from "./LibraryUserEntity";
 @Index("idx_ebooks_uploaded_by", ["uploadedBy"])
 @Check("chk_ebooks_total_pages", "total_pages IS NULL OR total_pages > 0")
 export class EbookEntity {
-	@PrimaryGeneratedColumn({ type: "int", unsigned: true })
-	id: number;
+	@PrimaryColumn({
+		type: "char",
+		length: 36,
+		charset: "utf8mb3",
+		collation: "utf8mb3_general_ci"
+	})
+	id: string;
 
 	@Column({ type: "varchar", length: 255 })
 	title: string;

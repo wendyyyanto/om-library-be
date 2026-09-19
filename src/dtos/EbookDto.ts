@@ -20,12 +20,8 @@ function trim(value: unknown): unknown {
 }
 
 export class GetEbookParamsDto {
-	@Transform(({ value }) =>
-		typeof value === "string" ? Number(value) : value
-	)
-	@IsInt({ message: "Ebook ID must be a positive integer!" })
-	@Min(1, { message: "Ebook ID must be a positive integer!" })
-	id: number;
+	@IsUUID(undefined, { message: "Ebook ID must be a valid UUID!" })
+	id: string;
 }
 
 export class CreateEbookDto {
@@ -150,7 +146,7 @@ export interface EbookUploaderResponse {
 }
 
 export interface CreatedEbookResponse {
-	id: number;
+	id: string;
 	title: string;
 	author: string;
 	language: string;
@@ -169,7 +165,7 @@ export interface CreateEbookResponse {
 }
 
 export interface EbookListItemResponse {
-	id: number;
+	id: string;
 	title: string;
 	author: string;
 	tags: EbookTagResponse[];

@@ -8,6 +8,7 @@ import {
 	NotFoundException
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
+import { randomUUID } from "node:crypto";
 import { In, Repository } from "typeorm";
 import { ERROR_CODES } from "../constants/error-codes";
 import {
@@ -103,7 +104,9 @@ export class EbookService {
 			if (tags.length !== dto.tag_ids.length)
 				throw this.invalidReference("One or more ebook tags do not exist.");
 
-			const ebook = await manager.getRepository(EbookEntity).save({
+			const id = randomUUID();
+			await manager.getRepository(EbookEntity).insert({
+				id,
 				title: dto.title,
 				author: dto.author,
 				language: dto.language,
@@ -115,10 +118,10 @@ export class EbookService {
 			});
 
 			await manager.getRepository(EbookTagLinkEntity).insert(
-				dto.tag_ids.map((tagId) => ({ ebookId: ebook.id, tagId }))
+				dto.tag_ids.map((tagId) => ({ ebookId: id, tagId }))
 			);
 
-			return ebook.id;
+			return id;
 		});
 
 		return { data: await this.getDetailData(ebookId) };
@@ -159,13 +162,13 @@ export class EbookService {
 		};
 	}
 
-	async getById(id: number): Promise<EbookDetailResponse> {
+	async getById(id: string): Promise<EbookDetailResponse> {
 		return { data: await this.getDetailData(id) };
 	}
 
 	async update(
 		userId: string,
-		id: number,
+		id: string,
 		dto: UpdateEbookDto
 	): Promise<UpdateEbookResponse> {
 		await this.transactions.run(async (manager) => {
@@ -246,7 +249,7 @@ export class EbookService {
 		return this.getById(id);
 	}
 
-	async delete(userId: string, id: number): Promise<void> {
+	async delete(userId: string, id: string): Promise<void> {
 		const fileIds = await this.transactions.run(async (manager) => {
 			const ebooks = manager.getRepository(EbookEntity);
 			const ebook = await ebooks
@@ -280,7 +283,7 @@ export class EbookService {
 		await this.cleanupDetachedFiles(userId, fileIds, `Ebook ${id}`);
 	}
 
-	private async getDetailData(id: number): Promise<CreatedEbookResponse> {
+	private async getDetailData(id: string): Promise<CreatedEbookResponse> {
 		const ebook = await this.ebooks.findOne({
 			where: { id },
 			select: {
@@ -345,8 +348,8 @@ export class EbookService {
 	}
 
 	private async getTagsByEbook(
-		ebookIds: number[]
-	): Promise<Map<number, EbookTagResponse[]>> {
+		ebookIds: string[]
+	): Promise<Map<string, EbookTagResponse[]>> {
 		if (ebookIds.length === 0) return new Map();
 
 		const links = await this.tagLinks.find({
@@ -359,7 +362,7 @@ export class EbookService {
 			relations: { tag: true },
 			order: { ebookId: "ASC", tagId: "ASC" }
 		});
-		const tagsByEbook = new Map<number, EbookTagResponse[]>();
+		const tagsByEbook = new Map<string, EbookTagResponse[]>();
 
 		for (const link of links) {
 			const tags = tagsByEbook.get(link.ebookId) ?? [];
