@@ -61,7 +61,6 @@ export class EbookService {
 		userId: string,
 		dto: CreateEbookDto
 	): Promise<CreateEbookResponse> {
-		const tagIds = dto.tag_ids ?? [];
 		const ebookId = await this.transactions.run(async (manager) => {
 			const files = manager.getRepository(LibraryFileEntity);
 			const fileIds = [
@@ -98,13 +97,11 @@ export class EbookService {
 					);
 			}
 
-			if (tagIds.length > 0) {
-				const tags = await manager.getRepository(EbookTagEntity).findBy({
-					id: In(tagIds)
-				});
-				if (tags.length !== tagIds.length)
-					throw this.invalidReference("One or more ebook tags do not exist.");
-			}
+			const tags = await manager.getRepository(EbookTagEntity).findBy({
+				id: In(dto.tag_ids)
+			});
+			if (tags.length !== dto.tag_ids.length)
+				throw this.invalidReference("One or more ebook tags do not exist.");
 
 			const ebook = await manager.getRepository(EbookEntity).save({
 				title: dto.title,
@@ -117,10 +114,9 @@ export class EbookService {
 				uploadedBy: userId
 			});
 
-			if (tagIds.length > 0)
-				await manager.getRepository(EbookTagLinkEntity).insert(
-					tagIds.map((tagId) => ({ ebookId: ebook.id, tagId }))
-				);
+			await manager.getRepository(EbookTagLinkEntity).insert(
+				dto.tag_ids.map((tagId) => ({ ebookId: ebook.id, tagId }))
+			);
 
 			return ebook.id;
 		});
@@ -219,13 +215,11 @@ export class EbookService {
 					);
 			}
 
-			if (dto.tag_ids.length > 0) {
-				const tags = await manager.getRepository(EbookTagEntity).findBy({
-					id: In(dto.tag_ids)
-				});
-				if (tags.length !== dto.tag_ids.length)
-					throw this.invalidReference("One or more ebook tags do not exist.");
-			}
+			const tags = await manager.getRepository(EbookTagEntity).findBy({
+				id: In(dto.tag_ids)
+			});
+			if (tags.length !== dto.tag_ids.length)
+				throw this.invalidReference("One or more ebook tags do not exist.");
 
 			const result = await ebooks.update(
 				{ id },
@@ -244,10 +238,9 @@ export class EbookService {
 
 			const tagLinks = manager.getRepository(EbookTagLinkEntity);
 			await tagLinks.delete({ ebookId: id });
-			if (dto.tag_ids.length > 0)
-				await tagLinks.insert(
-					dto.tag_ids.map((tagId) => ({ ebookId: id, tagId }))
-				);
+			await tagLinks.insert(
+				dto.tag_ids.map((tagId) => ({ ebookId: id, tagId }))
+			);
 		});
 
 		return this.getById(id);

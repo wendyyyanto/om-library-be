@@ -1,6 +1,7 @@
 import { Transform } from "class-transformer";
 import {
 	IsDefined,
+	ArrayNotEmpty,
 	ArrayUnique,
 	IsArray,
 	IsInt,
@@ -63,15 +64,15 @@ export class CreateEbookDto {
 	@IsString({ message: "Overview must be text!" })
 	overview?: string | null;
 
-	@IsOptional()
 	@IsArray({ message: "Tag IDs must be an array!" })
+	@ArrayNotEmpty({ message: "At least one tag ID is required!" })
 	@ArrayUnique({ message: "Tag IDs must not contain duplicates!" })
 	@IsInt({ each: true, message: "Every tag ID must be a positive integer!" })
 	@Min(1, {
 		each: true,
 		message: "Every tag ID must be a positive integer!"
 	})
-	tag_ids?: number[];
+	tag_ids: number[];
 }
 
 export class UpdateEbookDto {
@@ -120,6 +121,7 @@ export class UpdateEbookDto {
 	overview: string | null;
 
 	@IsArray({ message: "Tag IDs must be an array!" })
+	@ArrayNotEmpty({ message: "At least one tag ID is required!" })
 	@ArrayUnique({ message: "Tag IDs must not contain duplicates!" })
 	@IsInt({ each: true, message: "Every tag ID must be a positive integer!" })
 	@Min(1, {
