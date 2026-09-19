@@ -229,16 +229,6 @@ export class ClassService {
 			)
 				throw this.totalWeeksBelowMaterial();
 
-			if (dto.title !== classRecord.title) {
-				const hasMaterialFiles = await manager
-					.getRepository(ClassMaterialFileEntity)
-					.createQueryBuilder("link")
-					.innerJoin("link.material", "material")
-					.where("material.classId = :classId", { classId: id })
-					.getExists();
-				if (hasMaterialFiles) throw this.classTitleInUse();
-			}
-
 			const result = await classes.update(
 				{ id },
 				{
@@ -334,14 +324,6 @@ export class ClassService {
 				);
 			if (files.some((file) => !this.isMaterialFile(file.contentType)))
 				throw this.invalidMaterialType();
-			if (
-				files.some(
-					(file) => !file.storageKey.startsWith(`${uploadPath}/`)
-				)
-			)
-				throw this.invalidFileState(
-					`Every class material file must be uploaded to ${uploadPath}.`
-				);
 
 			const material = await manager.getRepository(ClassMaterialEntity).save({
 				classId,
@@ -424,14 +406,6 @@ export class ClassService {
 				);
 			if (files.some((file) => !this.isMaterialFile(file.contentType)))
 				throw this.invalidMaterialType();
-			if (
-				files.some(
-					(file) => !file.storageKey.startsWith(`${nextUploadPath}/`)
-				)
-			)
-				throw this.invalidFileState(
-					`Every class material file must be uploaded to ${nextUploadPath}.`
-				);
 
 			const updateResult = await materials.update(
 				{ id: materialId, classId },
@@ -690,15 +664,6 @@ export class ClassService {
 			statusCode: HttpStatus.CONFLICT,
 			code: ERROR_CODES.INVALID_STATE,
 			message: "Total weeks cannot be lower than an existing material week."
-		});
-	}
-
-	private classTitleInUse(): ConflictException {
-		return new ConflictException({
-			statusCode: HttpStatus.CONFLICT,
-			code: ERROR_CODES.INVALID_STATE,
-			message:
-				"Class title cannot be changed while material files are attached."
 		});
 	}
 

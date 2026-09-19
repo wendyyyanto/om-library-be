@@ -10,7 +10,7 @@ import { TransactionRunner } from '../utilities/TransactionRunner';
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService): TypeOrmModuleOptions => ({
-        type: 'mysql',
+        type: 'mariadb',
         host: config.get<string>('DB_HOST'),
         username: config.get<string>('DB_USER'),
         password: config.get<string>('DB_PASSWORD'),
