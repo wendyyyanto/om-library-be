@@ -26,6 +26,7 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `POST`   | `/v1/auth/logout`   | bearer | `204`, no body. Revokes by cutoff — see below.                   |
 | `GET`    | `/v1/profile`       | bearer | The caller's own account.                                        |
 | `PATCH`  | `/v1/profile`       | bearer | `name` for anyone; `role`/`status` admin-only.                   |
+| `POST`   | `/v1/dropdown`      | bearer | Read allowlisted database values as `{ id, name }` options.      |
 | `GET`    | `/v1/teachings`     | bearer | Paginated teaching list, newest first.                           |
 | `GET`    | `/v1/teachings/:id` | bearer | Teaching detail with file metadata.                              |
 | `POST`   | `/v1/teachings`     | bearer | Create a teaching owned by the caller.                           |
@@ -53,6 +54,62 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 The R2 credentials use an R2 API token's S3 access key id and secret access key, not a
 general Cloudflare REST API bearer token. The app refuses to start if the required R2
 configuration is incomplete.
+
+## Dropdowns
+
+`POST /v1/dropdown` reads dropdown options from an explicit server-side allowlist. It never
+accepts an arbitrary table or column. The first requested attribute is returned as `id` and
+the second as `name`. Results are distinct and require a bearer token.
+
+Allowed entities and attributes are:
+
+| Entity               | Attributes                         |
+| -------------------- | ---------------------------------- |
+| `teaching_events`    | `id`, `name`                       |
+| `teachers`           | `id`, `name`                       |
+| `years`              | `id`, `year`                       |
+| `books`              | `id`, `bookName`, `totalChapters`  |
+| `class_categories`   | `id`, `label`                      |
+| `ebook_tags`         | `id`, `label`                      |
+| `library_roles`      | `id`, `name`                       |
+| `library_statuses`   | `id`, `name`                       |
+
+An unpaginated request returns `{ "data": [...] }`:
+
+```json
+{
+	"entity": "ebook_tags",
+	"attributes": ["id", "label"],
+	"filters": [
+		{
+			"key": "label",
+			"operator": "like",
+			"value": "%leadership%"
+		}
+	],
+	"sort_by": [["label", "asc"]],
+	"is_paginated": 0
+}
+```
+
+```json
+{
+	"data": [
+		{
+			"id": 1,
+			"name": "Leadership"
+		}
+	]
+}
+```
+
+Filters support `like`, `in`, `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `is` and `is_not`.
+The `in` operator accepts an array of up to 100 scalar values. `is` and `is_not` accept
+only `null`. Filters default to `and`; set `logical` to `or` on subsequent filters when
+needed. Filter values are sent to MySQL as bound parameters.
+
+Set `is_paginated` to `1` to receive the standard `data` and `pagination` response. `page`
+defaults to `1`; `limit` defaults to `10` and accepts values from `1` through `50`.
 
 ## Teachings
 

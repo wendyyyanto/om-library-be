@@ -7,7 +7,7 @@ import { LibraryFileEntity } from "../entities/LibraryFileEntity";
 import { TeachingEntity } from "../entities/TeachingEntity";
 import { FilesService } from "../services/FilesService";
 
-const DEFAULT_FILE_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+const DEFAULT_FILE_UPLOAD_MAX_BYTES = 1024 * 1024 * 1024;
 
 @Module({
 	imports: [

@@ -3,3 +3,5 @@ node_modules
 .env
 dist
 *.tsbuildinfo
+.zvec-grep
+.serena

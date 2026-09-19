@@ -1,6 +1,6 @@
 {
 	"name": "om-library-be",
-	"version": "1.4.2",
+	"version": "1.5.1",
 	"description": "Organic Ministry library API — accounts, profiles, and book lending.",
 	"main": "dist/main",
 	"scripts": {
