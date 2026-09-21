@@ -1,9 +1,13 @@
 import { Transform } from "class-transformer";
 import {
+	ArrayMaxSize,
+	IsArray,
 	IsDefined,
 	IsEnum,
 	IsOptional,
+	IsString,
 	IsUrl,
+	MaxLength,
 	IsUUID,
 	ValidateIf,
 	ValidateBy,
@@ -27,6 +31,12 @@ function trim(value: unknown): unknown {
 function trimOptional(value: unknown): unknown {
 	const trimmed = trim(value);
 	return trimmed === "" ? undefined : trimmed;
+}
+
+// `?year=2020&year=2021` arrives as an array, a single `?year=2020` as a string.
+function toTrimmedArray(value: unknown): unknown {
+	const values = Array.isArray(value) ? value : [value];
+	return values.map((item) => trim(item)).filter((item) => item !== "");
 }
 
 function IsRequiredString(
@@ -82,6 +92,9 @@ function IsIntegerInRange(
 	);
 }
 
+const CATEGORY_MESSAGE =
+	"Category must be New Testament, Old Testament, Topical Teaching, or Workshop!";
+
 export class GetTeachingsQueryDto {
 	@IsOptional()
 	@Transform(({ value }) => toNumber(value))
@@ -96,6 +109,50 @@ export class GetTeachingsQueryDto {
 		message: "Limit must be an integer from 1 to 50!"
 	})
 	limit?: number;
+
+	@IsOptional()
+	@Transform(({ value }) => trimOptional(value))
+	@IsString({ message: "Search keyword must be text!" })
+	@MaxLength(255, { message: "Search keyword must be at most 255 characters!" })
+	q?: string;
+
+	@IsOptional()
+	@Transform(({ value }) => trimOptional(value))
+	@IsString({ message: "Passage must be text!" })
+	@MaxLength(255, { message: "Passage must be at most 255 characters!" })
+	passage?: string;
+
+	@IsOptional()
+	@Transform(({ value }) => trimOptional(value))
+	@IsString({ message: "Chapters must be text!" })
+	@MaxLength(255, { message: "Chapters must be at most 255 characters!" })
+	chapters?: string;
+
+	@IsOptional()
+	@Transform(({ value }) => trimOptional(value))
+	@IsEnum(TeachingCategory, { message: CATEGORY_MESSAGE })
+	category?: TeachingCategory;
+
+	@IsOptional()
+	@Transform(({ value }) => toTrimmedArray(value))
+	@IsArray({ message: "Year must be an array!" })
+	@ArrayMaxSize(50, { message: "At most 50 years are allowed!" })
+	@IsString({ each: true, message: "Each year must be text!" })
+	year?: string[];
+
+	@IsOptional()
+	@Transform(({ value }) => toTrimmedArray(value))
+	@IsArray({ message: "Teacher must be an array!" })
+	@ArrayMaxSize(50, { message: "At most 50 teachers are allowed!" })
+	@IsString({ each: true, message: "Each teacher must be text!" })
+	teacher?: string[];
+
+	@IsOptional()
+	@Transform(({ value }) => toTrimmedArray(value))
+	@IsArray({ message: "Event must be an array!" })
+	@ArrayMaxSize(50, { message: "At most 50 events are allowed!" })
+	@IsString({ each: true, message: "Each event must be text!" })
+	event?: string[];
 }
 
 export class GetTeachingParamsDto {
@@ -103,8 +160,6 @@ export class GetTeachingParamsDto {
 	id: string;
 }
 
-const CATEGORY_MESSAGE =
-	"Category must be New Testament, Old Testament, Topical Teaching, or Workshop!";
 export const TEACHING_MEDIA_REQUIRED_MESSAGE =
 	"At least one of audio_file_id or video_url is required!";
 

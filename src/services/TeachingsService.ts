@@ -31,6 +31,20 @@ import { TeachingEntity } from "../entities/TeachingEntity";
 import { TransactionRunner } from "../utilities/TransactionRunner";
 import { FilesService } from "./FilesService";
 
+const SEARCHABLE_COLUMNS = [
+	"title",
+	"passage",
+	"chapters",
+	"category",
+	"year",
+	"teacher",
+	"event"
+] as const;
+
+function escapeLike(value: string): string {
+	return value.replace(/[\\%_]/g, "\\$&");
+}
+
 @Injectable()
 export class TeachingsService {
 	private readonly logger = new Logger(TeachingsService.name);
@@ -81,23 +95,59 @@ export class TeachingsService {
 		const page = query.page ?? DEFAULT_TEACHINGS_PAGE;
 		const limit = query.limit ?? DEFAULT_TEACHINGS_LIMIT;
 
-		const [teachings, totalItems] = await this.teachings.findAndCount({
-			select: {
-				id: true,
-				title: true,
-				category: true,
-				teacher: true,
-				createdAt: true,
-				uploader: {
-					id: true,
-					name: true
-				}
-			},
-			relations: { uploader: true },
-			order: { createdAt: "DESC", id: "DESC" },
-			skip: (page - 1) * limit,
-			take: limit
+		const builder = this.teachings
+			.createQueryBuilder("teaching")
+			.innerJoin("teaching.uploader", "uploader")
+			.select([
+				"teaching.id",
+				"teaching.title",
+				"teaching.category",
+				"teaching.teacher",
+				"teaching.createdAt",
+				"uploader.id",
+				"uploader.name"
+			]);
+
+		if (query.passage)
+			builder.andWhere("teaching.passage LIKE :passage", {
+				passage: `%${escapeLike(query.passage)}%`
+			});
+		if (query.chapters)
+			builder.andWhere("teaching.chapters LIKE :chapters", {
+				chapters: `%${escapeLike(query.chapters)}%`
+			});
+		if (query.category)
+			builder.andWhere("teaching.category = :category", {
+				category: query.category
+			});
+		if (query.year?.length)
+			builder.andWhere("teaching.year IN (:...years)", { years: query.year });
+		if (query.teacher?.length)
+			builder.andWhere("teaching.teacher IN (:...teachers)", {
+				teachers: query.teacher
+			});
+		if (query.event?.length)
+			builder.andWhere("teaching.event IN (:...events)", {
+				events: query.event
+			});
+
+		// Every keyword must appear in at least one text column, so "john acia"
+		// matches passage "John" taught by "Acia".
+		const keywords = query.q?.split(/\s+/).filter(Boolean).slice(0, 10) ?? [];
+		keywords.forEach((keyword, index) => {
+			const param = `keyword${index}`;
+			builder.andWhere(
+				`(${SEARCHABLE_COLUMNS.map((column) => `teaching.${column} LIKE :${param}`).join(" OR ")})`,
+				{ [param]: `%${escapeLike(keyword)}%` }
+			);
 		});
+
+		const [teachings, totalItems] = await builder
+			.orderBy("teaching.createdAt", "DESC")
+			.addOrderBy("teaching.id", "DESC")
+			.skip((page - 1) * limit)
+			.take(limit)
+			.getManyAndCount();
 
 		return {
 			data: teachings.map((teaching) => this.toResponse(teaching)),
