@@ -3,7 +3,9 @@ import {
 	IsDefined,
 	IsEnum,
 	IsOptional,
+	IsString,
 	IsUrl,
+	MaxLength,
 	IsUUID,
 	ValidateIf,
 	ValidateBy,
@@ -96,6 +98,12 @@ export class GetTeachingsQueryDto {
 		message: "Limit must be an integer from 1 to 50!"
 	})
 	limit?: number;
+
+	@IsOptional()
+	@Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+	@IsString()
+	@MaxLength(100)
+	q?: string;
 }
 
 export class GetTeachingParamsDto {
@@ -234,6 +242,7 @@ export interface TeachingUploaderResponse {
 export interface TeachingListItemResponse {
 	id: string;
 	title: string;
+	passage: string;
 	category: TeachingCategory;
 	teacher: string;
 	date: string;

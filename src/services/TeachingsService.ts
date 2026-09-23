@@ -9,7 +9,7 @@ import {
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { randomUUID } from "node:crypto";
-import { In, Repository } from "typeorm";
+import { In, Like, Repository } from "typeorm";
 import { ERROR_CODES } from "../constants/error-codes";
 import {
 	CreatedTeachingResponse,
@@ -80,11 +80,15 @@ export class TeachingsService {
 	async list(query: GetTeachingsQueryDto): Promise<TeachingsListResponse> {
 		const page = query.page ?? DEFAULT_TEACHINGS_PAGE;
 		const limit = query.limit ?? DEFAULT_TEACHINGS_LIMIT;
+		const pattern = query.q
+			? `%${query.q.replace(/[\\%_]/g, "\\$&")}%`
+			: undefined;
 
 		const [teachings, totalItems] = await this.teachings.findAndCount({
 			select: {
 				id: true,
 				title: true,
+				passage: true,
 				category: true,
 				teacher: true,
 				createdAt: true,
@@ -94,6 +98,9 @@ export class TeachingsService {
 				}
 			},
 			relations: { uploader: true },
+			where: pattern
+				? [{ title: Like(pattern) }, { teacher: Like(pattern) }]
+				: undefined,
 			order: { createdAt: "DESC", id: "DESC" },
 			skip: (page - 1) * limit,
 			take: limit
@@ -358,6 +365,7 @@ export class TeachingsService {
 		return {
 			id: teaching.id,
 			title: teaching.title,
+			passage: teaching.passage,
 			category: teaching.category,
 			teacher: teaching.teacher,
 			date: teaching.createdAt.toISOString(),
