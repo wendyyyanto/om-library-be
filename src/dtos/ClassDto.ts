@@ -1,9 +1,5 @@
 import { Transform } from "class-transformer";
 import {
-	ArrayNotEmpty,
-	ArrayMaxSize,
-	ArrayUnique,
-	IsArray,
 	IsDefined,
 	IsInt,
 	IsNotEmpty,
@@ -91,20 +87,9 @@ export class CreateClassMaterialDto {
 	@MaxLength(255, { message: "Title must be at most 255 characters!" })
 	title: string;
 
-	@IsOptional()
-	@Transform(({ value }) => trim(value))
-	@IsString({ message: "Description must be text!" })
-	description?: string | null;
-
-	@IsArray({ message: "File IDs must be an array!" })
-	@ArrayNotEmpty({ message: "At least one file ID is required!" })
-	@ArrayMaxSize(50, { message: "A material may contain at most 50 files!" })
-	@ArrayUnique({ message: "File IDs must not contain duplicates!" })
-	@IsUUID("4", {
-		each: true,
-		message: "Every file ID must be a valid UUID!"
-	})
-	file_ids: string[];
+	@IsDefined({ message: "File ID is required!" })
+	@IsUUID("4", { message: "File ID must be a valid UUID!" })
+	file_id: string;
 }
 
 export class UpdateClassMaterialParamsDto {
@@ -130,29 +115,15 @@ export class UpdateClassMaterialDto {
 	@MaxLength(255, { message: "Title must be at most 255 characters!" })
 	title: string;
 
-	@IsDefined({
-		message: "Description is required; use null when there is no description!"
-	})
-	@ValidateIf((_object, value) => value !== null)
-	@Transform(({ value }) => trim(value))
-	@IsString({ message: "Description must be text!" })
-	description: string | null;
-
 	@IsDefined({ message: "Week is required; use null when there is no week!" })
 	@ValidateIf((_object, value) => value !== null)
 	@IsInt({ message: "Week must be a positive integer!" })
 	@Min(1, { message: "Week must be a positive integer!" })
 	week: number | null;
 
-	@IsArray({ message: "File IDs must be an array!" })
-	@ArrayNotEmpty({ message: "At least one file ID is required!" })
-	@ArrayMaxSize(50, { message: "A material may contain at most 50 files!" })
-	@ArrayUnique({ message: "File IDs must not contain duplicates!" })
-	@IsUUID("4", {
-		each: true,
-		message: "Every file ID must be a valid UUID!"
-	})
-	file_ids: string[];
+	@IsDefined({ message: "File ID is required!" })
+	@IsUUID("4", { message: "File ID must be a valid UUID!" })
+	file_id: string;
 }
 
 export interface ClassCategoryResponse {
@@ -193,9 +164,8 @@ export interface CreatedClassMaterialResponse {
 	class_id: number;
 	week: number | null;
 	title: string;
-	description: string | null;
 	upload_path: string;
-	files: ClassMaterialFileResponse[];
+	file: ClassMaterialFileResponse;
 	created_at: string;
 	updated_at: string;
 }
@@ -222,8 +192,7 @@ export interface ClassMaterialDetailResponse {
 	id: number;
 	week: number | null;
 	title: string;
-	description: string | null;
-	files: ClassMaterialFileResponse[];
+	file: ClassMaterialFileResponse;
 	created_at: string;
 	updated_at: string;
 }

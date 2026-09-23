@@ -360,16 +360,13 @@ material with its related files:
 				"id": 15,
 				"week": 1,
 				"title": "Introduction",
-				"description": "Slides, recording, and reading material.",
-				"files": [
-					{
-						"id": "319b925f-48c6-4e4d-9ee7-a114eacf0b63",
-						"file_name": "introduction.pdf",
-						"content_type": "application/pdf",
-						"size_bytes": 532100,
-						"url": "https://assets.organic-ministry.org/Classes/Foundations%20of%20Faith/introduction.pdf"
-					}
-				],
+				"file": {
+					"id": "319b925f-48c6-4e4d-9ee7-a114eacf0b63",
+					"file_name": "introduction.pdf",
+					"content_type": "application/pdf",
+					"size_bytes": 532100,
+					"url": "https://assets.organic-ministry.org/Classes/Foundations%20of%20Faith/introduction.pdf"
+				},
 				"created_at": "2026-09-16T08:30:00.000Z",
 				"updated_at": "2026-09-16T08:30:00.000Z"
 			}
@@ -441,35 +438,30 @@ below the week of an existing material. Because material files use
 endpoint returns `409 INVALID_STATE` instead of leaving inconsistent R2 paths. Success
 returns `200 OK` using the same detailed response as `GET /v1/class/:id`.
 
-`DELETE /v1/class/:id` deletes a class owned by the authenticated caller. Its materials and
-material-file links are removed by database cascades. After the class transaction commits,
+`DELETE /v1/class/:id` deletes a class owned by the authenticated caller. Its materials are
+removed by a database cascade. After the class transaction commits,
 each detached file is deleted from R2 and `library_files` only when no teaching, ebook, or
 other class material still references it. Shared files are retained. Success returns `204`
 with no body; missing classes return `404` and classes owned by another user return `403`.
 If post-commit storage cleanup fails, the error is logged and the file metadata remains for
 safe retry.
 
-`POST /v1/class/:id/materials` creates one class material and links between one and fifty
-previously uploaded files to it. Upload every file through `POST /v1/files` using the exact
-path `Classes/{class_title}`, then submit the returned file ids together:
+`POST /v1/class/:id/materials` creates one class material with exactly one previously
+uploaded file. Upload the file through `POST /v1/files` using the exact path
+`Classes/{class_title}`, then submit the returned file id:
 
 ```json
 {
 	"week": 1,
 	"title": "Introduction",
-	"description": "Slides, recording, and reading material.",
-	"file_ids": [
-		"319b925f-48c6-4e4d-9ee7-a114eacf0b63",
-		"c96d934f-2154-4fea-bf0d-a97f519863f7"
-	]
+	"file_id": "319b925f-48c6-4e4d-9ee7-a114eacf0b63"
 }
 ```
 
 `week` is optional and may be `null`. When both the material week and the class's
 `total_weeks` are present, the material week cannot exceed the class total. The caller must
-own the class and every file. Files must be PDF, PowerPoint, audio, or video, and their
-storage key must use the class path. The material and every file link are inserted in one
-transaction.
+own the class and the file. The file must be PDF, PowerPoint, audio, or video, and its
+storage key must use the class path.
 
 Success returns `201 Created`:
 
@@ -480,17 +472,14 @@ Success returns `201 Created`:
 		"class_id": 41,
 		"week": 1,
 		"title": "Introduction",
-		"description": "Slides, recording, and reading material.",
 		"upload_path": "Classes/Foundations of Faith",
-		"files": [
-			{
-				"id": "319b925f-48c6-4e4d-9ee7-a114eacf0b63",
-				"file_name": "introduction.pdf",
-				"content_type": "application/pdf",
-				"size_bytes": 532100,
-				"url": "https://assets.organic-ministry.org/Classes/Foundations%20of%20Faith/introduction.pdf"
-			}
-		],
+		"file": {
+			"id": "319b925f-48c6-4e4d-9ee7-a114eacf0b63",
+			"file_name": "introduction.pdf",
+			"content_type": "application/pdf",
+			"size_bytes": 532100,
+			"url": "https://assets.organic-ministry.org/Classes/Foundations%20of%20Faith/introduction.pdf"
+		},
 		"created_at": "2026-09-16T08:30:00.000Z",
 		"updated_at": "2026-09-16T08:30:00.000Z"
 	}
@@ -498,28 +487,22 @@ Success returns `201 Created`:
 ```
 
 `PUT /v1/class/:classId/materials/:materialId` completely replaces the editable material
-fields and its file links. All fields must be present; use `null` for a material without a
-description or week:
+fields and its file. All fields must be present; use `null` for a material without a
+week:
 
 ```json
 {
 	"title": "Introduction — Revised",
-	"description": "Updated slides and recording.",
 	"week": 2,
-	"file_ids": [
-		"5e65be73-76ec-4599-b5ef-13af44674af8",
-		"73e33160-af33-47ad-9921-59893ab50fcb"
-	]
+	"file_id": "5e65be73-76ec-4599-b5ef-13af44674af8"
 }
 ```
 
 The class and material ids must be positive integers, the material must belong to the class,
-and the caller must own the class and every submitted file. Week, file type, and class-path
-rules are the same as material creation. The material update and replacement of all
-`class_material_files` rows happen in one transaction. Success returns `200 OK` using the
-same `data` structure as material creation. Files removed from the material remain in R2 and
-`library_files`; delete them explicitly through `DELETE /v1/files` when they are no longer
-needed.
+and the caller must own the class and the submitted file. Week, file type, and class-path
+rules are the same as material creation. Success returns `200 OK` using the same `data`
+structure as material creation. A replaced file remains in R2 and `library_files`; delete it
+explicitly through `DELETE /v1/files` when it is no longer needed.
 
 ## Ebooks
 

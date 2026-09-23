@@ -61,7 +61,8 @@ function IsRequiredString(
 					args.value === ""
 				)
 					return `${field} is required!`;
-				if (typeof args.value !== "string") return `${field} must be text!`;
+				if (typeof args.value !== "string")
+					return `${field} must be text!`;
 				return `${field} must be at most ${maximumLength} characters!`;
 			}
 		}
@@ -113,7 +114,9 @@ export class GetTeachingsQueryDto {
 	@IsOptional()
 	@Transform(({ value }) => trimOptional(value))
 	@IsString({ message: "Search keyword must be text!" })
-	@MaxLength(255, { message: "Search keyword must be at most 255 characters!" })
+	@MaxLength(255, {
+		message: "Search keyword must be at most 255 characters!"
+	})
 	q?: string;
 
 	@IsOptional()
@@ -200,7 +203,11 @@ export class CreateTeachingDto {
 	@IsOptional()
 	@Transform(({ value }) => trimOptional(value))
 	@IsUrl(
-		{ protocols: ["http", "https"], require_protocol: true, require_tld: false },
+		{
+			protocols: ["http", "https"],
+			require_protocol: true,
+			require_tld: false
+		},
 		{ message: "Video URL must be a valid HTTP or HTTPS URL!" }
 	)
 	video_url?: string | null;
@@ -246,7 +253,8 @@ export class UpdateTeachingDto {
 	event: string;
 
 	@IsDefined({
-		message: "Audio file ID is required; use null when no audio file is attached!"
+		message:
+			"Audio file ID is required; use null when no audio file is attached!"
 	})
 	@ValidateIf((_object, value) => value !== null)
 	@Transform(({ value }) => trim(value))
@@ -254,18 +262,24 @@ export class UpdateTeachingDto {
 	audio_file_id: string | null;
 
 	@IsDefined({
-		message: "Video URL is required; use null when no video URL is attached!"
+		message:
+			"Video URL is required; use null when no video URL is attached!"
 	})
 	@ValidateIf((_object, value) => value !== null)
 	@Transform(({ value }) => trim(value))
 	@IsUrl(
-		{ protocols: ["http", "https"], require_protocol: true, require_tld: false },
+		{
+			protocols: ["http", "https"],
+			require_protocol: true,
+			require_tld: false
+		},
 		{ message: "Video URL must be a valid HTTP or HTTPS URL!" }
 	)
 	video_url: string | null;
 
 	@IsDefined({
-		message: "PDF file ID is required; use null when no PDF file is attached!"
+		message:
+			"PDF file ID is required; use null when no PDF file is attached!"
 	})
 	@ValidateIf((_object, value) => value !== null)
 	@Transform(({ value }) => trim(value))
@@ -273,7 +287,8 @@ export class UpdateTeachingDto {
 	pdf_file_id: string | null;
 
 	@IsDefined({
-		message: "PPT file ID is required; use null when no PPT file is attached!"
+		message:
+			"PPT file ID is required; use null when no PPT file is attached!"
 	})
 	@ValidateIf((_object, value) => value !== null)
 	@Transform(({ value }) => trim(value))
