@@ -1,5 +1,7 @@
 import { Transform } from "class-transformer";
 import {
+	ArrayMaxSize,
+	IsArray,
 	IsDefined,
 	IsEnum,
 	IsOptional,
@@ -31,6 +33,12 @@ function trimOptional(value: unknown): unknown {
 	return trimmed === "" ? undefined : trimmed;
 }
 
+// `?year=2020&year=2021` arrives as an array, a single `?year=2020` as a string.
+function toTrimmedArray(value: unknown): unknown {
+	const values = Array.isArray(value) ? value : [value];
+	return values.map((item) => trim(item)).filter((item) => item !== "");
+}
+
 function IsRequiredString(
 	field: string,
 	maximumLength: number
@@ -53,7 +61,8 @@ function IsRequiredString(
 					args.value === ""
 				)
 					return `${field} is required!`;
-				if (typeof args.value !== "string") return `${field} must be text!`;
+				if (typeof args.value !== "string")
+					return `${field} must be text!`;
 				return `${field} must be at most ${maximumLength} characters!`;
 			}
 		}
@@ -84,6 +93,9 @@ function IsIntegerInRange(
 	);
 }
 
+const CATEGORY_MESSAGE =
+	"Category must be New Testament, Old Testament, Topical Teaching, or Workshop!";
+
 export class GetTeachingsQueryDto {
 	@IsOptional()
 	@Transform(({ value }) => toNumber(value))
@@ -100,10 +112,50 @@ export class GetTeachingsQueryDto {
 	limit?: number;
 
 	@IsOptional()
-	@Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
-	@IsString()
-	@MaxLength(100)
+	@Transform(({ value }) => trimOptional(value))
+	@IsString({ message: "Search keyword must be text!" })
+	@MaxLength(255, {
+		message: "Search keyword must be at most 255 characters!"
+	})
 	q?: string;
+
+	@IsOptional()
+	@Transform(({ value }) => trimOptional(value))
+	@IsString({ message: "Passage must be text!" })
+	@MaxLength(255, { message: "Passage must be at most 255 characters!" })
+	passage?: string;
+
+	@IsOptional()
+	@Transform(({ value }) => trimOptional(value))
+	@IsString({ message: "Chapters must be text!" })
+	@MaxLength(255, { message: "Chapters must be at most 255 characters!" })
+	chapters?: string;
+
+	@IsOptional()
+	@Transform(({ value }) => trimOptional(value))
+	@IsEnum(TeachingCategory, { message: CATEGORY_MESSAGE })
+	category?: TeachingCategory;
+
+	@IsOptional()
+	@Transform(({ value }) => toTrimmedArray(value))
+	@IsArray({ message: "Year must be an array!" })
+	@ArrayMaxSize(50, { message: "At most 50 years are allowed!" })
+	@IsString({ each: true, message: "Each year must be text!" })
+	year?: string[];
+
+	@IsOptional()
+	@Transform(({ value }) => toTrimmedArray(value))
+	@IsArray({ message: "Teacher must be an array!" })
+	@ArrayMaxSize(50, { message: "At most 50 teachers are allowed!" })
+	@IsString({ each: true, message: "Each teacher must be text!" })
+	teacher?: string[];
+
+	@IsOptional()
+	@Transform(({ value }) => toTrimmedArray(value))
+	@IsArray({ message: "Event must be an array!" })
+	@ArrayMaxSize(50, { message: "At most 50 events are allowed!" })
+	@IsString({ each: true, message: "Each event must be text!" })
+	event?: string[];
 }
 
 export class GetTeachingParamsDto {
@@ -111,8 +163,6 @@ export class GetTeachingParamsDto {
 	id: string;
 }
 
-const CATEGORY_MESSAGE =
-	"Category must be New Testament, Old Testament, Topical Teaching, or Workshop!";
 export const TEACHING_MEDIA_REQUIRED_MESSAGE =
 	"At least one of audio_file_id or video_url is required!";
 
@@ -153,7 +203,11 @@ export class CreateTeachingDto {
 	@IsOptional()
 	@Transform(({ value }) => trimOptional(value))
 	@IsUrl(
-		{ protocols: ["http", "https"], require_protocol: true, require_tld: false },
+		{
+			protocols: ["http", "https"],
+			require_protocol: true,
+			require_tld: false
+		},
 		{ message: "Video URL must be a valid HTTP or HTTPS URL!" }
 	)
 	video_url?: string | null;
@@ -199,7 +253,8 @@ export class UpdateTeachingDto {
 	event: string;
 
 	@IsDefined({
-		message: "Audio file ID is required; use null when no audio file is attached!"
+		message:
+			"Audio file ID is required; use null when no audio file is attached!"
 	})
 	@ValidateIf((_object, value) => value !== null)
 	@Transform(({ value }) => trim(value))
@@ -207,18 +262,24 @@ export class UpdateTeachingDto {
 	audio_file_id: string | null;
 
 	@IsDefined({
-		message: "Video URL is required; use null when no video URL is attached!"
+		message:
+			"Video URL is required; use null when no video URL is attached!"
 	})
 	@ValidateIf((_object, value) => value !== null)
 	@Transform(({ value }) => trim(value))
 	@IsUrl(
-		{ protocols: ["http", "https"], require_protocol: true, require_tld: false },
+		{
+			protocols: ["http", "https"],
+			require_protocol: true,
+			require_tld: false
+		},
 		{ message: "Video URL must be a valid HTTP or HTTPS URL!" }
 	)
 	video_url: string | null;
 
 	@IsDefined({
-		message: "PDF file ID is required; use null when no PDF file is attached!"
+		message:
+			"PDF file ID is required; use null when no PDF file is attached!"
 	})
 	@ValidateIf((_object, value) => value !== null)
 	@Transform(({ value }) => trim(value))
@@ -226,7 +287,8 @@ export class UpdateTeachingDto {
 	pdf_file_id: string | null;
 
 	@IsDefined({
-		message: "PPT file ID is required; use null when no PPT file is attached!"
+		message:
+			"PPT file ID is required; use null when no PPT file is attached!"
 	})
 	@ValidateIf((_object, value) => value !== null)
 	@Transform(({ value }) => trim(value))
@@ -243,6 +305,7 @@ export interface TeachingListItemResponse {
 	id: string;
 	title: string;
 	passage: string;
+	chapters: string;
 	category: TeachingCategory;
 	teacher: string;
 	date: string;
