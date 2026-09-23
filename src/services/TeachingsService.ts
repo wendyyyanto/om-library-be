@@ -101,6 +101,8 @@ export class TeachingsService {
 			.select([
 				"teaching.id",
 				"teaching.title",
+				"teaching.passage",
+				"teaching.chapters",
 				"teaching.category",
 				"teaching.teacher",
 				"teaching.createdAt",
@@ -408,6 +410,8 @@ export class TeachingsService {
 		return {
 			id: teaching.id,
 			title: teaching.title,
+			passage: teaching.passage,
+			chapters: teaching.chapters,
 			category: teaching.category,
 			teacher: teaching.teacher,
 			date: teaching.createdAt.toISOString(),

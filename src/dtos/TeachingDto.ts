@@ -289,6 +289,8 @@ export interface TeachingUploaderResponse {
 export interface TeachingListItemResponse {
 	id: string;
 	title: string;
+	passage: string;
+	chapters: string;
 	category: TeachingCategory;
 	teacher: string;
 	date: string;
