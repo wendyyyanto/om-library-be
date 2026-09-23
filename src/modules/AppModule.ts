@@ -5,7 +5,10 @@ import { MysqlExceptionFilter } from "../commons/MysqlExceptionFilter";
 import { createValidationPipe } from "../commons/ValidationPipe";
 import { AppController } from "../controllers/AppController";
 import { AuthModule } from "./AuthModule";
+import { ClassModule } from "./ClassModule";
 import { DatabaseModule } from "./DatabaseModule";
+import { DropdownModule } from "./DropdownModule";
+import { EbookModule } from "./EbookModule";
 import { FilesModule } from "./FilesModule";
 import { ProfileModule } from "./ProfileModule";
 import { TeachingsModule } from "./TeachingsModule";
@@ -16,6 +19,9 @@ import { TeachingsModule } from "./TeachingsModule";
 		DiscoveryModule,
 		DatabaseModule,
 		AuthModule,
+		DropdownModule,
+		ClassModule,
+		EbookModule,
 		FilesModule,
 		ProfileModule,
 		TeachingsModule

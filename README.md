@@ -26,6 +26,7 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `POST`   | `/v1/auth/logout`   | bearer | `204`, no body. Revokes by cutoff — see below.                   |
 | `GET`    | `/v1/profile`       | bearer | The caller's own account.                                        |
 | `PATCH`  | `/v1/profile`       | bearer | `name` for anyone; `role`/`status` admin-only.                   |
+| `POST`   | `/v1/dropdown`      | bearer | Read allowlisted database values as `{ id, name }` options.      |
 | `GET`    | `/v1/teachings`     | bearer | Paginated teaching list, newest first.                           |
 | `GET`    | `/v1/teachings/:id` | bearer | Teaching detail with file metadata.                              |
 | `POST`   | `/v1/teachings`     | bearer | Create a teaching owned by the caller.                           |
@@ -54,6 +55,62 @@ The R2 credentials use an R2 API token's S3 access key id and secret access key,
 general Cloudflare REST API bearer token. The app refuses to start if the required R2
 configuration is incomplete.
 
+## Dropdowns
+
+`POST /v1/dropdown` reads dropdown options from an explicit server-side allowlist. It never
+accepts an arbitrary table or column. The first requested attribute is returned as `id` and
+the second as `name`. Results are distinct and require a bearer token.
+
+Allowed entities and attributes are:
+
+| Entity               | Attributes                         |
+| -------------------- | ---------------------------------- |
+| `teaching_events`    | `id`, `name`                       |
+| `teachers`           | `id`, `name`                       |
+| `years`              | `id`, `year`                       |
+| `books`              | `id`, `bookName`, `totalChapters`  |
+| `class_categories`   | `id`, `label`                      |
+| `ebook_tags`         | `id`, `label`                      |
+| `library_roles`      | `id`, `name`                       |
+| `library_statuses`   | `id`, `name`                       |
+
+An unpaginated request returns `{ "data": [...] }`:
+
+```json
+{
+	"entity": "ebook_tags",
+	"attributes": ["id", "label"],
+	"filters": [
+		{
+			"key": "label",
+			"operator": "like",
+			"value": "%leadership%"
+		}
+	],
+	"sort_by": [["label", "asc"]],
+	"is_paginated": 0
+}
+```
+
+```json
+{
+	"data": [
+		{
+			"id": 1,
+			"name": "Leadership"
+		}
+	]
+}
+```
+
+Filters support `like`, `in`, `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `is` and `is_not`.
+The `in` operator accepts an array of up to 100 scalar values. `is` and `is_not` accept
+only `null`. Filters default to `and`; set `logical` to `or` on subsequent filters when
+needed. Filter values are sent to MySQL as bound parameters.
+
+Set `is_paginated` to `1` to receive the standard `data` and `pagination` response. `page`
+defaults to `1`; `limit` defaults to `10` and accepts values from `1` through `50`.
+
 ## Teachings
 
 `GET /v1/teachings` returns a paginated teaching list. `page` defaults to `1`; `limit`
@@ -66,6 +123,8 @@ fields used by the list view and returns snake-case response keys:
 		{
 			"id": "550e8400-e29b-41d4-a716-446655440000",
 			"title": "Living by Faith",
+			"passage": "Hebrews 11",
+			"chapters": "11",
 			"category": "Topical Teaching",
 			"teacher": "John Doe",
 			"date": "2026-08-17T00:00:00.000Z",
@@ -245,6 +304,398 @@ committing its database deletes, so a later database failure can leave an object
 its metadata remains. A durable deletion outbox with retries is required if guaranteed
 cross-system recovery becomes a requirement.
 
+## Classes
+
+`GET /v1/classes` returns class summaries ordered by newest creation time and id. `page`
+defaults to `1`; `limit` defaults to `10` and accepts values from `1` through `50`.
+
+```json
+{
+	"data": [
+		{
+			"id": 41,
+			"title": "Foundations of Faith",
+			"total_weeks": 12,
+			"class_category": {
+				"id": 3,
+				"label": "Discipleship"
+			},
+			"uploaded_by": {
+				"id": "66e76a86-9507-4b52-a2d6-f9bd7d58a68a",
+				"name": "Jane Doe"
+			},
+			"created_at": "2026-09-15T08:30:00.000Z",
+			"updated_at": "2026-09-15T08:30:00.000Z"
+		}
+	],
+	"pagination": {
+		"page": 1,
+		"limit": 10,
+		"total_items": 1,
+		"total_pages": 1
+	}
+}
+```
+
+`GET /v1/class/:id` returns the complete class, its category and uploader, and every class
+material with its related files:
+
+```json
+{
+	"data": {
+		"id": 41,
+		"title": "Foundations of Faith",
+		"description": "A twelve-week introductory class.",
+		"total_weeks": 12,
+		"class_category": {
+			"id": 3,
+			"label": "Discipleship"
+		},
+		"uploaded_by": {
+			"id": "66e76a86-9507-4b52-a2d6-f9bd7d58a68a",
+			"name": "Jane Doe"
+		},
+		"materials": [
+			{
+				"id": 15,
+				"week": 1,
+				"title": "Introduction",
+				"description": "Slides, recording, and reading material.",
+				"files": [
+					{
+						"id": "319b925f-48c6-4e4d-9ee7-a114eacf0b63",
+						"file_name": "introduction.pdf",
+						"content_type": "application/pdf",
+						"size_bytes": 532100,
+						"url": "https://assets.organic-ministry.org/Classes/Foundations%20of%20Faith/introduction.pdf"
+					}
+				],
+				"created_at": "2026-09-16T08:30:00.000Z",
+				"updated_at": "2026-09-16T08:30:00.000Z"
+			}
+		],
+		"created_at": "2026-09-15T08:30:00.000Z",
+		"updated_at": "2026-09-15T08:30:00.000Z"
+	}
+}
+```
+
+A class with no materials returns `materials: []`. A material with no linked files returns
+`files: []`.
+
+`POST /v1/class` creates class metadata for the authenticated caller. The category id must
+reference an existing `class_categories` row. The server derives `uploaded_by` from the
+access token and generates the numeric id and timestamps.
+
+```json
+{
+	"title": "Foundations of Faith",
+	"description": "A twelve-week introductory class.",
+	"total_weeks": 12,
+	"class_category_id": 3
+}
+```
+
+Success returns `201 Created` with the resolved category and uploader:
+
+```json
+{
+	"data": {
+		"id": 41,
+		"title": "Foundations of Faith",
+		"description": "A twelve-week introductory class.",
+		"total_weeks": 12,
+		"class_category": {
+			"id": 3,
+			"label": "Discipleship"
+		},
+		"created_at": "2026-09-15T08:30:00.000Z",
+		"updated_at": "2026-09-15T08:30:00.000Z",
+		"uploaded_by": {
+			"id": "66e76a86-9507-4b52-a2d6-f9bd7d58a68a",
+			"name": "Jane Doe"
+		}
+	}
+}
+```
+
+`title` and `class_category_id` are required. `total_weeks` may be omitted or `null`, but
+when present it must be a positive integer. Class materials are separate records and are
+not created by this endpoint.
+
+`PUT /v1/class/:id` completely replaces the editable class fields. All fields must be
+present; use `null` when there is no description or total-week limit:
+
+```json
+{
+	"title": "Foundations of Faith — Revised",
+	"description": "Updated class description.",
+	"total_weeks": 10,
+	"class_category_id": 2
+}
+```
+
+The caller must own the class and the category must exist. `total_weeks` cannot be reduced
+below the week of an existing material. Because material files use
+`Classes/{class_title}`, the title cannot change while material files are attached; the
+endpoint returns `409 INVALID_STATE` instead of leaving inconsistent R2 paths. Success
+returns `200 OK` using the same detailed response as `GET /v1/class/:id`.
+
+`DELETE /v1/class/:id` deletes a class owned by the authenticated caller. Its materials and
+material-file links are removed by database cascades. After the class transaction commits,
+each detached file is deleted from R2 and `library_files` only when no teaching, ebook, or
+other class material still references it. Shared files are retained. Success returns `204`
+with no body; missing classes return `404` and classes owned by another user return `403`.
+If post-commit storage cleanup fails, the error is logged and the file metadata remains for
+safe retry.
+
+`POST /v1/class/:id/materials` creates one class material and links between one and fifty
+previously uploaded files to it. Upload every file through `POST /v1/files` using the exact
+path `Classes/{class_title}`, then submit the returned file ids together:
+
+```json
+{
+	"week": 1,
+	"title": "Introduction",
+	"description": "Slides, recording, and reading material.",
+	"file_ids": [
+		"319b925f-48c6-4e4d-9ee7-a114eacf0b63",
+		"c96d934f-2154-4fea-bf0d-a97f519863f7"
+	]
+}
+```
+
+`week` is optional and may be `null`. When both the material week and the class's
+`total_weeks` are present, the material week cannot exceed the class total. The caller must
+own the class and every file. Files must be PDF, PowerPoint, audio, or video, and their
+storage key must use the class path. The material and every file link are inserted in one
+transaction.
+
+Success returns `201 Created`:
+
+```json
+{
+	"data": {
+		"id": 15,
+		"class_id": 41,
+		"week": 1,
+		"title": "Introduction",
+		"description": "Slides, recording, and reading material.",
+		"upload_path": "Classes/Foundations of Faith",
+		"files": [
+			{
+				"id": "319b925f-48c6-4e4d-9ee7-a114eacf0b63",
+				"file_name": "introduction.pdf",
+				"content_type": "application/pdf",
+				"size_bytes": 532100,
+				"url": "https://assets.organic-ministry.org/Classes/Foundations%20of%20Faith/introduction.pdf"
+			}
+		],
+		"created_at": "2026-09-16T08:30:00.000Z",
+		"updated_at": "2026-09-16T08:30:00.000Z"
+	}
+}
+```
+
+`PUT /v1/class/:classId/materials/:materialId` completely replaces the editable material
+fields and its file links. All fields must be present; use `null` for a material without a
+description or week:
+
+```json
+{
+	"title": "Introduction — Revised",
+	"description": "Updated slides and recording.",
+	"week": 2,
+	"file_ids": [
+		"5e65be73-76ec-4599-b5ef-13af44674af8",
+		"73e33160-af33-47ad-9921-59893ab50fcb"
+	]
+}
+```
+
+The class and material ids must be positive integers, the material must belong to the class,
+and the caller must own the class and every submitted file. Week, file type, and class-path
+rules are the same as material creation. The material update and replacement of all
+`class_material_files` rows happen in one transaction. Success returns `200 OK` using the
+same `data` structure as material creation. Files removed from the material remain in R2 and
+`library_files`; delete them explicitly through `DELETE /v1/files` when they are no longer
+needed.
+
+## Ebooks
+
+`GET /v1/ebooks` returns ebook summaries ordered by newest creation time and id. Tags are
+resolved from `ebook_tag_links` and `ebook_tags`. `page` defaults to `1`; `limit` defaults
+to `10` and accepts values from `1` through `50`.
+
+```json
+{
+	"data": [
+		{
+			"id": 73,
+			"title": "Knowing God",
+			"author": "J. I. Packer",
+			"tags": [
+				{
+					"id": 1,
+					"label": "Theology"
+				}
+			],
+			"uploaded_by": {
+				"id": "66e76a86-9507-4b52-a2d6-f9bd7d58a68a",
+				"name": "Jane Doe"
+			},
+			"created_at": "2026-09-15T08:35:00.000Z",
+			"updated_at": "2026-09-15T08:35:00.000Z"
+		}
+	],
+	"pagination": {
+		"page": 1,
+		"limit": 10,
+		"total_items": 1,
+		"total_pages": 1
+	}
+}
+```
+
+`GET /v1/ebook/:id` returns the complete ebook with its cover, ebook file, tags, and
+uploader:
+
+```json
+{
+	"data": {
+		"id": 73,
+		"title": "Knowing God",
+		"author": "J. I. Packer",
+		"language": "en",
+		"total_pages": 288,
+		"overview": "An introduction to the character and attributes of God.",
+		"cover_file": {
+			"id": "319b925f-48c6-4e4d-9ee7-a114eacf0b63",
+			"file_name": "knowing-god.webp",
+			"content_type": "image/webp",
+			"size_bytes": 142830,
+			"url": "https://assets.organic-ministry.org/ebooks/covers/knowing-god.webp"
+		},
+		"ebook_file": {
+			"id": "c96d934f-2154-4fea-bf0d-a97f519863f7",
+			"file_name": "knowing-god.pdf",
+			"content_type": "application/pdf",
+			"size_bytes": 4218630,
+			"url": "https://assets.organic-ministry.org/ebooks/knowing-god.pdf"
+		},
+		"tags": [
+			{
+				"id": 1,
+				"label": "Theology"
+			}
+		],
+		"created_at": "2026-09-15T08:35:00.000Z",
+		"updated_at": "2026-09-15T08:35:00.000Z",
+		"uploaded_by": {
+			"id": "66e76a86-9507-4b52-a2d6-f9bd7d58a68a",
+			"name": "Jane Doe"
+		}
+	}
+}
+```
+
+An ebook without a cover returns `cover_file: null`; an ebook without tags returns
+`tags: []`.
+
+`POST /v1/ebook` creates an ebook and its tag links in one transaction. Upload the cover
+and ebook through `POST /v1/files` first, then submit their returned ids. Both files must
+exist and belong to the authenticated caller. The ebook file must be PDF or EPUB; an
+optional cover must be JPEG, PNG or WebP.
+
+```json
+{
+	"title": "Knowing God",
+	"author": "J. I. Packer",
+	"language": "en",
+	"total_pages": 288,
+	"cover_file_id": "319b925f-48c6-4e4d-9ee7-a114eacf0b63",
+	"ebook_file_id": "c96d934f-2154-4fea-bf0d-a97f519863f7",
+	"overview": "An introduction to the character and attributes of God.",
+	"tag_ids": [1, 4]
+}
+```
+
+Success returns `201 Created`:
+
+```json
+{
+	"data": {
+		"id": 73,
+		"title": "Knowing God",
+		"author": "J. I. Packer",
+		"language": "en",
+		"total_pages": 288,
+		"overview": "An introduction to the character and attributes of God.",
+		"cover_file": {
+			"id": "319b925f-48c6-4e4d-9ee7-a114eacf0b63",
+			"file_name": "knowing-god.webp",
+			"content_type": "image/webp",
+			"size_bytes": 142830,
+			"url": "https://assets.organic-ministry.org/ebooks/covers/knowing-god.webp"
+		},
+		"ebook_file": {
+			"id": "c96d934f-2154-4fea-bf0d-a97f519863f7",
+			"file_name": "knowing-god.pdf",
+			"content_type": "application/pdf",
+			"size_bytes": 4218630,
+			"url": "https://assets.organic-ministry.org/ebooks/knowing-god.pdf"
+		},
+		"tags": [
+			{
+				"id": 1,
+				"label": "Theology"
+			}
+		],
+		"created_at": "2026-09-15T08:35:00.000Z",
+		"updated_at": "2026-09-15T08:35:00.000Z",
+		"uploaded_by": {
+			"id": "66e76a86-9507-4b52-a2d6-f9bd7d58a68a",
+			"name": "Jane Doe"
+		}
+	}
+}
+```
+
+`title`, `author`, `language` and `ebook_file_id` are required. `total_pages` must be a
+positive integer when present. `tag_ids` defaults to an empty list, must not contain
+duplicates, and every id must reference an existing `ebook_tags` row. An attached ebook
+or class-material file cannot be deleted through `DELETE /v1/files` while it remains in
+use.
+
+`PUT /v1/ebook/:id` completely replaces the editable ebook fields and tag links. All fields
+must be present; nullable values must be sent explicitly as `null`:
+
+```json
+{
+	"title": "Knowing God — Revised",
+	"author": "J. I. Packer",
+	"language": "en",
+	"total_pages": 320,
+	"cover_file_id": "319b925f-48c6-4e4d-9ee7-a114eacf0b63",
+	"ebook_file_id": "c96d934f-2154-4fea-bf0d-a97f519863f7",
+	"overview": "Updated overview.",
+	"tag_ids": [1, 3]
+}
+```
+
+The caller must own the ebook and both files. File-type rules are the same as ebook
+creation, and every tag must exist. The ebook update and complete replacement of its tag
+links happen in one transaction. Files removed from the ebook remain in R2 and
+`library_files` for explicit deletion. Success returns `200 OK` using the same detailed
+response as `GET /v1/ebook/:id`.
+
+`DELETE /v1/ebook/:id` deletes an ebook owned by the authenticated caller. Its tag links are
+removed by database cascade. After the ebook transaction commits, its cover and ebook files
+are deleted from R2 and `library_files` only when no remaining resource references them.
+Shared files are retained. Success returns `204` with no body; missing ebooks return `404`
+and ebooks owned by another user return `403`. If post-commit storage cleanup fails, the
+error is logged and the file metadata remains for safe retry.
+
 ## File uploads
 
 `POST /v1/files` accepts exactly one in-memory multipart file in the `file` field and an
@@ -297,10 +748,17 @@ curl -X DELETE http://localhost:3000/v1/files \
 
 ## Database
 
-Six tables: `library_users`, `library_auth_sessions`, `library_roles`,
-`library_statuses`, `library_files`, `teachings`.
-`synchronize` is off, so the service never alters schema at startup. Create the file metadata
-table before using the file endpoints:
+`synchronize` is off, so the service never alters schema at startup. To support class
+materials without a week, make `class_materials.week_number` nullable before using the
+material endpoint:
+
+```sql
+ALTER TABLE `class_materials`
+  MODIFY COLUMN `week_number` INT UNSIGNED NULL;
+```
+
+Back up the database or verify a rollback plan before applying this schema change. Create
+the file metadata table before using the file endpoints:
 
 ```sql
 CREATE TABLE `library_files` (
