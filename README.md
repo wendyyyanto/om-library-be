@@ -123,6 +123,8 @@ fields used by the list view and returns snake-case response keys:
 		{
 			"id": "550e8400-e29b-41d4-a716-446655440000",
 			"title": "Living by Faith",
+			"passage": "Hebrews 11",
+			"chapters": "11",
 			"category": "Topical Teaching",
 			"teacher": "John Doe",
 			"date": "2026-08-17T00:00:00.000Z",
