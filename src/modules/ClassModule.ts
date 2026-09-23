@@ -4,7 +4,6 @@ import { ClassController } from "../controllers/ClassController";
 import { ClassCategoryEntity } from "../entities/ClassCategoryEntity";
 import { ClassEntity } from "../entities/ClassEntity";
 import { ClassMaterialEntity } from "../entities/ClassMaterialEntity";
-import { ClassMaterialFileEntity } from "../entities/ClassMaterialFileEntity";
 import { LibraryFileEntity } from "../entities/LibraryFileEntity";
 import { ClassService } from "../services/ClassService";
 import { FilesModule } from "./FilesModule";
@@ -15,8 +14,7 @@ import { FilesModule } from "./FilesModule";
 			ClassEntity,
 			ClassCategoryEntity,
 			ClassMaterialEntity,
-			ClassMaterialFileEntity,
-			LibraryFileEntity
+					LibraryFileEntity
 		]),
 		FilesModule
 	],
