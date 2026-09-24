@@ -178,6 +178,7 @@ export class TeachingsService {
 			.leftJoinAndSelect("teaching.pdfFile", "pdfFile")
 			.leftJoinAndSelect("teaching.pptFile", "pptFile")
 			.leftJoinAndSelect("teaching.uploader", "uploader")
+			.leftJoin("teaching.thumbnail", "thumbnail")
 			.select([
 				"teaching.id",
 				"teaching.title",
@@ -206,7 +207,9 @@ export class TeachingsService {
 				"pptFile.fileName",
 				"pptFile.contentType",
 				"pptFile.sizeBytes",
-				"pptFile.url"
+				"pptFile.url",
+				"thumbnail.id",
+				"thumbnail.thumbnailUrl"
 			])
 			.where("teaching.id = :id", { id })
 			.getOne();
@@ -463,6 +466,7 @@ export class TeachingsService {
 			video_url: teaching.videoUrl,
 			pdf_file: this.toFileResponse(teaching.pdfFile),
 			ppt_file: this.toFileResponse(teaching.pptFile),
+			thumbnail_url: teaching.thumbnail?.thumbnailUrl ?? null,
 			created_at: teaching.createdAt.toISOString(),
 			updated_at: teaching.updatedAt.toISOString(),
 			uploaded_by: {

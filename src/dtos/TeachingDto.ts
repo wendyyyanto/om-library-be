@@ -346,6 +346,7 @@ export interface TeachingDetailDataResponse {
 	video_url: string | null;
 	pdf_file: TeachingFileResponse | null;
 	ppt_file: TeachingFileResponse | null;
+	thumbnail_url: string | null;
 	created_at: string;
 	updated_at: string;
 	uploaded_by: TeachingUploaderResponse;
