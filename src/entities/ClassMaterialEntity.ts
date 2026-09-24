@@ -38,10 +38,12 @@ export class ClassMaterialEntity {
 	@Column({ type: "varchar", length: 255 })
 	title: string;
 
-	@Column({ type: "text", nullable: true })
-	description: string | null;
-
-	@Column({ name: "week_number", type: "int", unsigned: true, nullable: true })
+	@Column({
+		name: "week_number",
+		type: "int",
+		unsigned: true,
+		nullable: true
+	})
 	weekNumber: number | null;
 
 	@CreateDateColumn({ name: "created_at", type: "timestamp" })

@@ -360,7 +360,6 @@ material with its related files:
 				"id": 15,
 				"week": 1,
 				"title": "Introduction",
-				"description": "Slides, recording, and reading material.",
 				"files": [
 					{
 						"id": "319b925f-48c6-4e4d-9ee7-a114eacf0b63",
@@ -457,7 +456,6 @@ path `Classes/{class_title}`, then submit the returned file ids together:
 {
 	"week": 1,
 	"title": "Introduction",
-	"description": "Slides, recording, and reading material.",
 	"file_ids": [
 		"319b925f-48c6-4e4d-9ee7-a114eacf0b63",
 		"c96d934f-2154-4fea-bf0d-a97f519863f7"
@@ -480,7 +478,6 @@ Success returns `201 Created`:
 		"class_id": 41,
 		"week": 1,
 		"title": "Introduction",
-		"description": "Slides, recording, and reading material.",
 		"upload_path": "Classes/Foundations of Faith",
 		"files": [
 			{
@@ -499,12 +496,11 @@ Success returns `201 Created`:
 
 `PUT /v1/class/:classId/materials/:materialId` completely replaces the editable material
 fields and its file links. All fields must be present; use `null` for a material without a
-description or week:
+week:
 
 ```json
 {
 	"title": "Introduction — Revised",
-	"description": "Updated slides and recording.",
 	"week": 2,
 	"file_ids": [
 		"5e65be73-76ec-4599-b5ef-13af44674af8",
@@ -795,6 +791,16 @@ ALTER TABLE `library_files` DROP COLUMN `deleted_at`;
 
 This schema change is destructive. Back up the database or verify a rollback plan first, and
 do not run it while an older application instance that still queries `deleted_at` is active.
+
+Class materials no longer have a description. After deploying code that no longer reads or
+writes it, drop the column:
+
+```sql
+ALTER TABLE `class_materials` DROP COLUMN `description`;
+```
+
+This is destructive in the same way: back up first and do not run it while an older
+instance that still selects `description` is active.
 
 `library_users.tokens_valid_from` is required and is **not** created automatically:
 

@@ -91,11 +91,6 @@ export class CreateClassMaterialDto {
 	@MaxLength(255, { message: "Title must be at most 255 characters!" })
 	title: string;
 
-	@IsOptional()
-	@Transform(({ value }) => trim(value))
-	@IsString({ message: "Description must be text!" })
-	description?: string | null;
-
 	@IsArray({ message: "File IDs must be an array!" })
 	@ArrayNotEmpty({ message: "At least one file ID is required!" })
 	@ArrayMaxSize(50, { message: "A material may contain at most 50 files!" })
@@ -129,14 +124,6 @@ export class UpdateClassMaterialDto {
 	@IsNotEmpty({ message: "Title is required!" })
 	@MaxLength(255, { message: "Title must be at most 255 characters!" })
 	title: string;
-
-	@IsDefined({
-		message: "Description is required; use null when there is no description!"
-	})
-	@ValidateIf((_object, value) => value !== null)
-	@Transform(({ value }) => trim(value))
-	@IsString({ message: "Description must be text!" })
-	description: string | null;
 
 	@IsDefined({ message: "Week is required; use null when there is no week!" })
 	@ValidateIf((_object, value) => value !== null)
@@ -193,7 +180,6 @@ export interface CreatedClassMaterialResponse {
 	class_id: number;
 	week: number | null;
 	title: string;
-	description: string | null;
 	upload_path: string;
 	files: ClassMaterialFileResponse[];
 	created_at: string;
@@ -222,7 +208,6 @@ export interface ClassMaterialDetailResponse {
 	id: number;
 	week: number | null;
 	title: string;
-	description: string | null;
 	files: ClassMaterialFileResponse[];
 	created_at: string;
 	updated_at: string;

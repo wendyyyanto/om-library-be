@@ -153,7 +153,6 @@ export class ClassService {
 				id: true,
 				classId: true,
 				title: true,
-				description: true,
 				weekNumber: true,
 				createdAt: true,
 				updatedAt: true
@@ -328,7 +327,6 @@ export class ClassService {
 			const material = await manager.getRepository(ClassMaterialEntity).save({
 				classId,
 				title: dto.title,
-				description: dto.description ?? null,
 				weekNumber: dto.week ?? null
 			});
 
@@ -411,7 +409,6 @@ export class ClassService {
 				{ id: materialId, classId },
 				{
 					title: dto.title,
-					description: dto.description,
 					weekNumber: dto.week
 				}
 			);
@@ -479,7 +476,6 @@ export class ClassService {
 				id: true,
 				classId: true,
 				title: true,
-				description: true,
 				weekNumber: true,
 				createdAt: true,
 				updatedAt: true
@@ -507,7 +503,6 @@ export class ClassService {
 			class_id: material.classId,
 			week: material.weekNumber,
 			title: material.title,
-			description: material.description,
 			upload_path: uploadPath,
 			files: links.map((link) => this.toMaterialFileResponse(link.file)),
 			created_at: material.createdAt.toISOString(),
@@ -555,7 +550,6 @@ export class ClassService {
 			id: material.id,
 			week: material.weekNumber,
 			title: material.title,
-			description: material.description,
 			files,
 			created_at: material.createdAt.toISOString(),
 			updated_at: material.updatedAt.toISOString()
