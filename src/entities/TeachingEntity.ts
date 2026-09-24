@@ -10,6 +10,7 @@ import {
 } from "typeorm";
 import { LibraryFileEntity } from "./LibraryFileEntity";
 import { LibraryUserEntity } from "./LibraryUserEntity";
+import { ThumbnailEntity } from "./ThumbnailEntity";
 
 export enum TeachingCategory {
 	NewTestament = "New Testament",
@@ -110,6 +111,26 @@ export class TeachingEntity {
 		foreignKeyConstraintName: "fk_teachings_ppt_file"
 	})
 	pptFile: LibraryFileEntity | null;
+
+	@Column({
+		name: "thumbnail_id",
+		type: "char",
+		length: 36,
+		charset: "utf8mb4",
+		collation: "utf8mb4_general_ci",
+		nullable: true
+	})
+	thumbnailId: string | null;
+
+	@ManyToOne(() => ThumbnailEntity, {
+		nullable: true,
+		onDelete: "SET NULL"
+	})
+	@JoinColumn({
+		name: "thumbnail_id",
+		foreignKeyConstraintName: "fk_teachings_thumbnail"
+	})
+	thumbnail: ThumbnailEntity | null;
 
 	@CreateDateColumn({ name: "created_at", type: "timestamp" })
 	createdAt: Date;

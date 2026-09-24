@@ -309,6 +309,7 @@ export interface TeachingListItemResponse {
 	category: TeachingCategory;
 	teacher: string;
 	date: string;
+	thumbnail_url: string | null;
 	uploaded_by: TeachingUploaderResponse;
 }
 

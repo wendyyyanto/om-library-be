@@ -101,6 +101,7 @@ export class TeachingsService {
 		const builder = this.teachings
 			.createQueryBuilder("teaching")
 			.innerJoin("teaching.uploader", "uploader")
+			.leftJoin("teaching.thumbnail", "thumbnail")
 			.select([
 				"teaching.id",
 				"teaching.title",
@@ -110,7 +111,9 @@ export class TeachingsService {
 				"teaching.teacher",
 				"teaching.createdAt",
 				"uploader.id",
-				"uploader.name"
+				"uploader.name",
+				"thumbnail.id",
+				"thumbnail.thumbnailUrl"
 			]);
 
 		if (query.passage)
@@ -436,6 +439,7 @@ export class TeachingsService {
 			category: teaching.category,
 			teacher: teaching.teacher,
 			date: teaching.createdAt.toISOString(),
+			thumbnail_url: teaching.thumbnail?.thumbnailUrl ?? null,
 			uploaded_by: {
 				id: teaching.uploader.id,
 				name: teaching.uploader.name
