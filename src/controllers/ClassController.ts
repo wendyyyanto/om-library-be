@@ -11,6 +11,7 @@ import {
 	Query
 } from "@nestjs/common";
 import { CurrentUser } from "../commons/CurrentUser";
+import { Public } from "../commons/Public";
 import {
 	CreateClassDto,
 	CreateClassMaterialDto,
@@ -51,6 +52,7 @@ export class ClassController {
 		return this.classService.createMaterial(userId, params.id, dto);
 	}
 
+	@Public()
 	@Get("classes")
 	@HttpCode(HttpStatus.OK)
 	async list(
@@ -59,6 +61,7 @@ export class ClassController {
 		return this.classService.list(query);
 	}
 
+	@Public()
 	@Get("class/:id")
 	@HttpCode(HttpStatus.OK)
 	async getById(

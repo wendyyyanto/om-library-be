@@ -11,6 +11,7 @@ import {
 	Query
 } from "@nestjs/common";
 import { CurrentUser } from "../commons/CurrentUser";
+import { Public } from "../commons/Public";
 import {
 	CreateEbookDto,
 	CreateEbookResponse,
@@ -36,6 +37,7 @@ export class EbookController {
 		return this.ebookService.create(userId, dto);
 	}
 
+	@Public()
 	@Get("ebooks")
 	@HttpCode(HttpStatus.OK)
 	async list(
@@ -44,6 +46,7 @@ export class EbookController {
 		return this.ebookService.list(query);
 	}
 
+	@Public()
 	@Get("ebook/:id")
 	@HttpCode(HttpStatus.OK)
 	async getById(

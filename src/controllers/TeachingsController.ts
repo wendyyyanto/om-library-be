@@ -13,6 +13,7 @@ import {
 } from "@nestjs/common";
 import { SnakeCaseExceptionFilter } from "../commons/SnakeCaseExceptionFilter";
 import { CurrentUser } from "../commons/CurrentUser";
+import { Public } from "../commons/Public";
 import {
 	CreateTeachingDto,
 	CreateTeachingResponse,
@@ -38,6 +39,7 @@ export class TeachingsController {
 		return this.teachingsService.create(userId, dto);
 	}
 
+	@Public()
 	@Get()
 	@HttpCode(HttpStatus.OK)
 	async list(
@@ -46,6 +48,7 @@ export class TeachingsController {
 		return this.teachingsService.list(query);
 	}
 
+	@Public()
 	@Get(":id")
 	@HttpCode(HttpStatus.OK)
 	async getById(
