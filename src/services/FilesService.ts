@@ -19,7 +19,7 @@ import { randomUUID } from "node:crypto";
 import { EntityManager, Repository } from "typeorm";
 import { ERROR_CODES } from "../constants/error-codes";
 import { FileUploadResponse } from "../dtos/FileDto";
-import { ClassMaterialFileEntity } from "../entities/ClassMaterialFileEntity";
+import { ClassMaterialEntity } from "../entities/ClassMaterialEntity";
 import { EbookEntity } from "../entities/EbookEntity";
 import { LibraryFileEntity } from "../entities/LibraryFileEntity";
 import { TeachingEntity } from "../entities/TeachingEntity";
@@ -314,7 +314,7 @@ export class FilesService {
 		if (ebookReference) return true;
 
 		return manager
-			.getRepository(ClassMaterialFileEntity)
+			.getRepository(ClassMaterialEntity)
 			.existsBy({ fileId });
 	}
 

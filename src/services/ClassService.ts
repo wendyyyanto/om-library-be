@@ -8,7 +8,7 @@ import {
 	NotFoundException
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { In, Repository } from "typeorm";
+import { Repository } from "typeorm";
 import { ERROR_CODES } from "../constants/error-codes";
 import {
 	CreateClassDto,
@@ -35,7 +35,6 @@ import {
 import { ClassCategoryEntity } from "../entities/ClassCategoryEntity";
 import { ClassEntity } from "../entities/ClassEntity";
 import { ClassMaterialEntity } from "../entities/ClassMaterialEntity";
-import { ClassMaterialFileEntity } from "../entities/ClassMaterialFileEntity";
 import { LibraryFileEntity } from "../entities/LibraryFileEntity";
 import { TransactionRunner } from "../utilities/TransactionRunner";
 import { FilesService } from "./FilesService";
@@ -45,6 +44,14 @@ const CLASS_MATERIAL_DOCUMENT_TYPES = new Set([
 	"application/vnd.ms-powerpoint",
 	"application/vnd.openxmlformats-officedocument.presentationml.presentation"
 ]);
+
+const MATERIAL_FILE_SELECT = {
+	id: true,
+	fileName: true,
+	contentType: true,
+	sizeBytes: true,
+	url: true
+} as const;
 
 @Injectable()
 export class ClassService {
@@ -57,8 +64,6 @@ export class ClassService {
 		private readonly categories: Repository<ClassCategoryEntity>,
 		@InjectRepository(ClassMaterialEntity)
 		private readonly materials: Repository<ClassMaterialEntity>,
-		@InjectRepository(ClassMaterialFileEntity)
-		private readonly materialFiles: Repository<ClassMaterialFileEntity>,
 		private readonly filesService: FilesService,
 		private readonly transactions: TransactionRunner
 	) {}
@@ -120,7 +125,9 @@ export class ClassService {
 		});
 
 		return {
-			data: classes.map((classRecord) => this.toListResponse(classRecord)),
+			data: classes.map((classRecord) =>
+				this.toListResponse(classRecord)
+			),
 			pagination: {
 				page,
 				limit,
@@ -155,13 +162,12 @@ export class ClassService {
 				title: true,
 				weekNumber: true,
 				createdAt: true,
-				updatedAt: true
+				updatedAt: true,
+				file: MATERIAL_FILE_SELECT
 			},
+			relations: { file: true },
 			order: { weekNumber: "ASC", id: "ASC" }
 		});
-		const filesByMaterial = await this.getFilesByMaterial(
-			materials.map((material) => material.id)
-		);
 
 		return {
 			data: {
@@ -178,10 +184,7 @@ export class ClassService {
 					name: classRecord.uploader.name
 				},
 				materials: materials.map((material) =>
-					this.toMaterialDetailResponse(
-						material,
-						filesByMaterial.get(material.id) ?? []
-					)
+					this.toMaterialDetailResponse(material)
 				),
 				created_at: classRecord.createdAt.toISOString(),
 				updated_at: classRecord.updatedAt.toISOString()
@@ -257,19 +260,15 @@ export class ClassService {
 			if (!classRecord) throw this.classNotFound();
 			if (classRecord.uploadedBy !== userId) throw this.forbiddenDelete();
 
-			const links = await manager
-				.getRepository(ClassMaterialFileEntity)
-				.createQueryBuilder("link")
-				.innerJoin("link.material", "material")
-				.select(["link.fileId"])
-				.where("material.classId = :classId", { classId: id })
-				.getMany();
+			const materials = await manager
+				.getRepository(ClassMaterialEntity)
+				.find({ where: { classId: id }, select: { fileId: true } });
 
 			const result = await classes.delete({ id });
 			if (result.affected !== 1)
 				throw new Error("The locked class could not be deleted.");
 
-			return [...new Set(links.map((link) => link.fileId))];
+			return [...new Set(materials.map((material) => material.fileId))];
 		});
 
 		await this.cleanupDetachedFiles(userId, fileIds, `Class ${id}`);
@@ -305,34 +304,32 @@ export class ClassService {
 				throw this.weekOutsideClass(classRecord.totalWeeks);
 
 			const uploadPath = this.materialUploadPath(classRecord.title);
-			const files = await manager
+			const file = await manager
 				.getRepository(LibraryFileEntity)
 				.createQueryBuilder("file")
-				.where("file.id IN (:...fileIds)", { fileIds: dto.file_ids })
-				.orderBy("file.id", "ASC")
+				.where("file.id = :fileId", { fileId: dto.file_id })
 				.setLock("pessimistic_read")
-				.getMany();
+				.getOne();
 
-			if (files.length !== dto.file_ids.length)
+			if (!file)
 				throw this.invalidReference(
-					"One or more class material files do not exist."
+					"Class material file does not exist."
 				);
-			if (files.some((file) => file.uploadedBy !== userId))
+			if (file.uploadedBy !== userId)
 				throw this.invalidFileState(
-					"One or more class material files belong to another user."
+					"Class material file belongs to another user."
 				);
-			if (files.some((file) => !this.isMaterialFile(file.contentType)))
+			if (!this.isMaterialFile(file.contentType))
 				throw this.invalidMaterialType();
 
-			const material = await manager.getRepository(ClassMaterialEntity).save({
-				classId,
-				title: dto.title,
-				weekNumber: dto.week ?? null
-			});
-
-			await manager.getRepository(ClassMaterialFileEntity).insert(
-				dto.file_ids.map((fileId) => ({ materialId: material.id, fileId }))
-			);
+			const material = await manager
+				.getRepository(ClassMaterialEntity)
+				.save({
+					classId,
+					title: dto.title,
+					weekNumber: dto.week ?? null,
+					fileId: dto.file_id
+				});
 
 			return { materialId: material.id, uploadPath };
 		});
@@ -386,40 +383,36 @@ export class ClassService {
 				throw this.weekOutsideClass(classRecord.totalWeeks);
 
 			const nextUploadPath = this.materialUploadPath(classRecord.title);
-			const files = await manager
+			const file = await manager
 				.getRepository(LibraryFileEntity)
 				.createQueryBuilder("file")
-				.where("file.id IN (:...fileIds)", { fileIds: dto.file_ids })
-				.orderBy("file.id", "ASC")
+				.where("file.id = :fileId", { fileId: dto.file_id })
 				.setLock("pessimistic_read")
-				.getMany();
+				.getOne();
 
-			if (files.length !== dto.file_ids.length)
+			if (!file)
 				throw this.invalidReference(
-					"One or more class material files do not exist."
+					"Class material file does not exist."
 				);
-			if (files.some((file) => file.uploadedBy !== userId))
+			if (file.uploadedBy !== userId)
 				throw this.invalidFileState(
-					"One or more class material files belong to another user."
+					"Class material file belongs to another user."
 				);
-			if (files.some((file) => !this.isMaterialFile(file.contentType)))
+			if (!this.isMaterialFile(file.contentType))
 				throw this.invalidMaterialType();
 
 			const updateResult = await materials.update(
 				{ id: materialId, classId },
 				{
 					title: dto.title,
-					weekNumber: dto.week
+					weekNumber: dto.week,
+					fileId: dto.file_id
 				}
 			);
 			if (updateResult.affected !== 1)
-				throw new Error("The locked class material could not be updated.");
-
-			const materialFiles = manager.getRepository(ClassMaterialFileEntity);
-			await materialFiles.delete({ materialId });
-			await materialFiles.insert(
-				dto.file_ids.map((fileId) => ({ materialId, fileId }))
-			);
+				throw new Error(
+					"The locked class material could not be updated."
+				);
 
 			return nextUploadPath;
 		});
@@ -478,24 +471,10 @@ export class ClassService {
 				title: true,
 				weekNumber: true,
 				createdAt: true,
-				updatedAt: true
-			}
-		});
-		const links = await this.materialFiles.find({
-			where: { materialId: id },
-			select: {
-				materialId: true,
-				fileId: true,
-				file: {
-					id: true,
-					fileName: true,
-					contentType: true,
-					sizeBytes: true,
-					url: true
-				}
+				updatedAt: true,
+				file: MATERIAL_FILE_SELECT
 			},
-			relations: { file: true },
-			order: { fileId: "ASC" }
+			relations: { file: true }
 		});
 
 		return {
@@ -504,53 +483,20 @@ export class ClassService {
 			week: material.weekNumber,
 			title: material.title,
 			upload_path: uploadPath,
-			files: links.map((link) => this.toMaterialFileResponse(link.file)),
+			file: this.toMaterialFileResponse(material.file),
 			created_at: material.createdAt.toISOString(),
 			updated_at: material.updatedAt.toISOString()
 		};
 	}
 
-	private async getFilesByMaterial(
-		materialIds: number[]
-	): Promise<Map<number, ClassMaterialFileResponse[]>> {
-		if (materialIds.length === 0) return new Map();
-
-		const links = await this.materialFiles.find({
-			where: { materialId: In(materialIds) },
-			select: {
-				materialId: true,
-				fileId: true,
-				file: {
-					id: true,
-					fileName: true,
-					contentType: true,
-					sizeBytes: true,
-					url: true
-				}
-			},
-			relations: { file: true },
-			order: { materialId: "ASC", fileId: "ASC" }
-		});
-		const filesByMaterial = new Map<number, ClassMaterialFileResponse[]>();
-
-		for (const link of links) {
-			const files = filesByMaterial.get(link.materialId) ?? [];
-			files.push(this.toMaterialFileResponse(link.file));
-			filesByMaterial.set(link.materialId, files);
-		}
-
-		return filesByMaterial;
-	}
-
 	private toMaterialDetailResponse(
-		material: ClassMaterialEntity,
-		files: ClassMaterialFileResponse[]
+		material: ClassMaterialEntity
 	): ClassMaterialDetailResponse {
 		return {
 			id: material.id,
 			week: material.weekNumber,
 			title: material.title,
-			files,
+			file: this.toMaterialFileResponse(material.file),
 			created_at: material.createdAt.toISOString(),
 			updated_at: material.updatedAt.toISOString()
 		};
@@ -608,7 +554,8 @@ export class ClassService {
 		return new ForbiddenException({
 			statusCode: HttpStatus.FORBIDDEN,
 			code: ERROR_CODES.FORBIDDEN,
-			message: "You do not have permission to add materials to this class."
+			message:
+				"You do not have permission to add materials to this class."
 		});
 	}
 
@@ -657,7 +604,8 @@ export class ClassService {
 		return new ConflictException({
 			statusCode: HttpStatus.CONFLICT,
 			code: ERROR_CODES.INVALID_STATE,
-			message: "Total weeks cannot be lower than an existing material week."
+			message:
+				"Total weeks cannot be lower than an existing material week."
 		});
 	}
 

@@ -9,7 +9,7 @@ import {
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { randomUUID } from "node:crypto";
-import { In, Repository } from "typeorm";
+import { In, Like, Repository } from "typeorm";
 import { ERROR_CODES } from "../constants/error-codes";
 import {
 	CreatedTeachingResponse,
@@ -94,6 +94,9 @@ export class TeachingsService {
 	async list(query: GetTeachingsQueryDto): Promise<TeachingsListResponse> {
 		const page = query.page ?? DEFAULT_TEACHINGS_PAGE;
 		const limit = query.limit ?? DEFAULT_TEACHINGS_LIMIT;
+		const pattern = query.q
+			? `%${query.q.replace(/[\\%_]/g, "\\$&")}%`
+			: undefined;
 
 		const builder = this.teachings
 			.createQueryBuilder("teaching")
@@ -123,7 +126,9 @@ export class TeachingsService {
 				category: query.category
 			});
 		if (query.year?.length)
-			builder.andWhere("teaching.year IN (:...years)", { years: query.year });
+			builder.andWhere("teaching.year IN (:...years)", {
+				years: query.year
+			});
 		if (query.teacher?.length)
 			builder.andWhere("teaching.teacher IN (:...teachers)", {
 				teachers: query.teacher
@@ -135,7 +140,8 @@ export class TeachingsService {
 
 		// Every keyword must appear in at least one text column, so "john acia"
 		// matches passage "John" taught by "Acia".
-		const keywords = query.q?.split(/\s+/).filter(Boolean).slice(0, 10) ?? [];
+		const keywords =
+			query.q?.split(/\s+/).filter(Boolean).slice(0, 10) ?? [];
 		keywords.forEach((keyword, index) => {
 			const param = `keyword${index}`;
 			builder.andWhere(
@@ -232,9 +238,11 @@ export class TeachingsService {
 
 			const nextFileIds = [
 				...new Set(
-					[dto.audio_file_id, dto.pdf_file_id, dto.ppt_file_id].filter(
-						(fileId): fileId is string => fileId !== null
-					)
+					[
+						dto.audio_file_id,
+						dto.pdf_file_id,
+						dto.ppt_file_id
+					].filter((fileId): fileId is string => fileId !== null)
 				)
 			];
 
@@ -286,9 +294,13 @@ export class TeachingsService {
 				}
 			);
 			if (result.affected !== 1)
-				throw new Error("The locked teaching row could not be updated.");
+				throw new Error(
+					"The locked teaching row could not be updated."
+				);
 
-			return previousFileIds.filter((fileId) => !nextFileIdSet.has(fileId));
+			return previousFileIds.filter(
+				(fileId) => !nextFileIdSet.has(fileId)
+			);
 		});
 
 		for (const fileId of detachedFileIds) {
@@ -323,7 +335,8 @@ export class TeachingsService {
 					.getOne();
 
 				if (!teaching) throw this.teachingNotFound();
-				if (teaching.uploadedBy !== userId) throw this.forbidden("delete");
+				if (teaching.uploadedBy !== userId)
+					throw this.forbidden("delete");
 
 				const fileIds = [
 					...new Set(
@@ -339,7 +352,11 @@ export class TeachingsService {
 					const files = await manager
 						.getRepository(LibraryFileEntity)
 						.createQueryBuilder("file")
-						.select(["file.id", "file.uploadedBy", "file.storageKey"])
+						.select([
+							"file.id",
+							"file.uploadedBy",
+							"file.storageKey"
+						])
 						.where("file.id IN (:...fileIds)", { fileIds })
 						.setLock("pessimistic_write")
 						.getMany();
@@ -368,7 +385,9 @@ export class TeachingsService {
 
 				const teachingResult = await teachings.delete({ id });
 				if (teachingResult.affected !== 1)
-					throw new Error("The locked teaching row could not be deleted.");
+					throw new Error(
+						"The locked teaching row could not be deleted."
+					);
 
 				if (fileIds.length > 0) {
 					const fileResult = await manager
@@ -385,7 +404,9 @@ export class TeachingsService {
 				this.logger.error(
 					`Teaching ${id} needs reconciliation after R2 deletion of file ids ${[
 						...deletedStorageFileIds
-					].join(", ")} did not result in a committed database deletion.`
+					].join(
+						", "
+					)} did not result in a committed database deletion.`
 				);
 			throw error;
 		}
