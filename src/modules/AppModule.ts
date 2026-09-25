@@ -4,6 +4,7 @@ import { APP_FILTER, APP_PIPE, DiscoveryModule } from "@nestjs/core";
 import { MysqlExceptionFilter } from "../commons/MysqlExceptionFilter";
 import { createValidationPipe } from "../commons/ValidationPipe";
 import { AppController } from "../controllers/AppController";
+import { AnnouncementModule } from "./AnnouncementModule";
 import { AuthModule } from "./AuthModule";
 import { ClassModule } from "./ClassModule";
 import { DatabaseModule } from "./DatabaseModule";
@@ -18,6 +19,7 @@ import { TeachingsModule } from "./TeachingsModule";
 		ConfigModule.forRoot({ isGlobal: true }),
 		DiscoveryModule,
 		DatabaseModule,
+		AnnouncementModule,
 		AuthModule,
 		DropdownModule,
 		ClassModule,

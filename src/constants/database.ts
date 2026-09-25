@@ -1,3 +1,4 @@
+import { AnnouncementEntity } from "../entities/AnnouncementEntity";
 import { AuthSessionEntity } from "../entities/AuthSessionEntity";
 import { ClassCategoryEntity } from "../entities/ClassCategoryEntity";
 import { ClassEntity } from "../entities/ClassEntity";
@@ -13,6 +14,7 @@ import { TeachingEntity } from "../entities/TeachingEntity";
 import { ThumbnailEntity } from "../entities/ThumbnailEntity";
 
 export const DATABASE_ENTITIES = [
+	AnnouncementEntity,
 	ThumbnailEntity,
 	LibraryUserEntity,
 	AuthSessionEntity,
