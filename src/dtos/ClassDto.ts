@@ -10,7 +10,7 @@ import {
 	Min,
 	ValidateIf
 } from "class-validator";
-import { PaginatedResponse } from "./PaginationDto";
+import { GetPaginationQueryDto, PaginatedResponse } from "./PaginationDto";
 
 function trim(value: unknown): unknown {
 	return typeof value === "string" ? value.trim() : value;
@@ -74,6 +74,27 @@ export class GetClassParamsDto {
 	@IsInt({ message: "Class ID must be a positive integer!" })
 	@Min(1, { message: "Class ID must be a positive integer!" })
 	id: number;
+}
+
+export class GetClassesQueryDto extends GetPaginationQueryDto {
+	@IsOptional()
+	@Transform(({ value }) =>
+		typeof value === "string" ? Number(value) : value
+	)
+	@IsInt({ message: "Category must be a positive integer!" })
+	@Min(1, { message: "Category must be a positive integer!" })
+	category?: number;
+
+	@IsOptional()
+	@Transform(({ value }) => {
+		const trimmed = trim(value);
+		return trimmed === "" ? undefined : trimmed;
+	})
+	@IsString({ message: "Search keyword must be text!" })
+	@MaxLength(255, {
+		message: "Search keyword must be at most 255 characters!"
+	})
+	q?: string;
 }
 
 export class CreateClassMaterialDto {

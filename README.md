@@ -307,7 +307,11 @@ cross-system recovery becomes a requirement.
 ## Classes
 
 `GET /v1/classes` returns class summaries ordered by newest creation time and id. `page`
-defaults to `1`; `limit` defaults to `10` and accepts values from `1` through `50`.
+defaults to `1`; `limit` defaults to `10` and accepts values from `1` through `50`. The
+optional `category` query parameter takes a class category id (positive integer) and returns
+only classes in that category, e.g. `GET /v1/classes?category=3&page=1`. The optional `q`
+keyword search splits on whitespace (up to 10 words); every word must appear in the class
+title or the category label, e.g. `GET /v1/classes?q=faith%20discipleship`.
 
 ```json
 {

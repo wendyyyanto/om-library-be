@@ -19,6 +19,7 @@ import {
 	CreateClassResponse,
 	ClassDetailResponse,
 	ClassesListResponse,
+	GetClassesQueryDto,
 	GetClassParamsDto,
 	UpdateClassMaterialDto,
 	UpdateClassMaterialParamsDto,
@@ -26,7 +27,6 @@ import {
 	UpdateClassDto,
 	UpdateClassResponse
 } from "../dtos/ClassDto";
-import { GetPaginationQueryDto } from "../dtos/PaginationDto";
 import { ClassService } from "../services/ClassService";
 
 @Controller()
@@ -56,7 +56,7 @@ export class ClassController {
 	@Get("classes")
 	@HttpCode(HttpStatus.OK)
 	async list(
-		@Query() query: GetPaginationQueryDto
+		@Query() query: GetClassesQueryDto
 	): Promise<ClassesListResponse> {
 		return this.classService.list(query);
 	}

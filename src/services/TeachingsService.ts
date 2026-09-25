@@ -28,6 +28,7 @@ import {
 } from "../dtos/TeachingDto";
 import { LibraryFileEntity } from "../entities/LibraryFileEntity";
 import { TeachingEntity } from "../entities/TeachingEntity";
+import { escapeLike } from "../utilities/escapeLike";
 import { TransactionRunner } from "../utilities/TransactionRunner";
 import { FilesService } from "./FilesService";
 
@@ -40,10 +41,6 @@ const SEARCHABLE_COLUMNS = [
 	"teacher",
 	"event"
 ] as const;
-
-function escapeLike(value: string): string {
-	return value.replace(/[\\%_]/g, "\\$&");
-}
 
 @Injectable()
 export class TeachingsService {

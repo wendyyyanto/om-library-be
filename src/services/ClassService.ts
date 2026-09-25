@@ -22,20 +22,18 @@ import {
 	CreatedClassMaterialResponse,
 	CreatedClassResponse,
 	ClassMaterialFileResponse,
+	GetClassesQueryDto,
 	UpdateClassDto,
 	UpdateClassMaterialDto,
 	UpdateClassMaterialResponse,
 	UpdateClassResponse
 } from "../dtos/ClassDto";
-import {
-	DEFAULT_LIMIT,
-	DEFAULT_PAGE,
-	GetPaginationQueryDto
-} from "../dtos/PaginationDto";
+import { DEFAULT_LIMIT, DEFAULT_PAGE } from "../dtos/PaginationDto";
 import { ClassCategoryEntity } from "../entities/ClassCategoryEntity";
 import { ClassEntity } from "../entities/ClassEntity";
 import { ClassMaterialEntity } from "../entities/ClassMaterialEntity";
 import { LibraryFileEntity } from "../entities/LibraryFileEntity";
+import { escapeLike } from "../utilities/escapeLike";
 import { TransactionRunner } from "../utilities/TransactionRunner";
 import { FilesService } from "./FilesService";
 
@@ -105,24 +103,48 @@ export class ClassService {
 		return { data: this.toResponse(classRecord) };
 	}
 
-	async list(query: GetPaginationQueryDto): Promise<ClassesListResponse> {
+	async list(query: GetClassesQueryDto): Promise<ClassesListResponse> {
 		const page = query.page ?? DEFAULT_PAGE;
 		const limit = query.limit ?? DEFAULT_LIMIT;
-		const [classes, totalItems] = await this.classes.findAndCount({
-			select: {
-				id: true,
-				title: true,
-				totalWeeks: true,
-				createdAt: true,
-				updatedAt: true,
-				category: { id: true, label: true },
-				uploader: { id: true, name: true }
-			},
-			relations: { category: true, uploader: true },
-			order: { createdAt: "DESC", id: "DESC" },
-			skip: (page - 1) * limit,
-			take: limit
+		const builder = this.classes
+			.createQueryBuilder("classRecord")
+			.innerJoin("classRecord.category", "category")
+			.innerJoin("classRecord.uploader", "uploader")
+			.select([
+				"classRecord.id",
+				"classRecord.title",
+				"classRecord.totalWeeks",
+				"classRecord.createdAt",
+				"classRecord.updatedAt",
+				"category.id",
+				"category.label",
+				"uploader.id",
+				"uploader.name"
+			]);
+
+		if (query.category)
+			builder.andWhere("classRecord.classCategoryId = :category", {
+				category: query.category
+			});
+
+		// Every keyword must appear in the title or the category label, so
+		// "faith discipleship" matches "Foundations of Faith" in "Discipleship".
+		const keywords =
+			query.q?.split(/\s+/).filter(Boolean).slice(0, 10) ?? [];
+		keywords.forEach((keyword, index) => {
+			const param = `keyword${index}`;
+			builder.andWhere(
+				`(classRecord.title LIKE :${param} OR category.label LIKE :${param})`,
+				{ [param]: `%${escapeLike(keyword)}%` }
+			);
 		});
+
+		const [classes, totalItems] = await builder
+			.orderBy("classRecord.createdAt", "DESC")
+			.addOrderBy("classRecord.id", "DESC")
+			.skip((page - 1) * limit)
+			.take(limit)
+			.getManyAndCount();
 
 		return {
 			data: classes.map((classRecord) =>
