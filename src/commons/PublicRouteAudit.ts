@@ -10,6 +10,7 @@ const ALLOWED_PUBLIC_ROUTES: ReadonlySet<string> = new Set([
 	"AuthController.login",
 	"AuthController.refresh",
 	"AuthController.register",
+	"AuthController.verify",
 	"ClassController.getById",
 	"ClassController.list",
 	"EbookController.getById",
