@@ -144,14 +144,14 @@ export class EbookService {
 				"uploader.name"
 			]);
 
-		// Every keyword must appear in the title or one of the ebook's tags, so
-		// "grace devotional" matches "Amazing Grace" tagged "Devotional".
+		// Every keyword must appear in the title, author, or one of the ebook's
+		// tags, so "grace devotional" matches "Amazing Grace" tagged "Devotional".
 		const keywords =
 			query.q?.split(/\s+/).filter(Boolean).slice(0, 10) ?? [];
 		keywords.forEach((keyword, index) => {
 			const param = `keyword${index}`;
 			builder.andWhere(
-				`(ebook.title LIKE :${param} OR EXISTS (
+				`(ebook.title LIKE :${param} OR ebook.author LIKE :${param} OR EXISTS (
 					SELECT 1 FROM ebook_tag_links link
 					INNER JOIN ebook_tags tag ON tag.id = link.tag_id
 					WHERE link.ebook_id = ebook.id AND tag.label LIKE :${param}
