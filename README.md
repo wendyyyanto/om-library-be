@@ -507,7 +507,9 @@ explicitly through `DELETE /v1/files` when it is no longer needed.
 
 `GET /v1/ebooks` returns ebook summaries ordered by newest creation time and id. Tags are
 resolved from `ebook_tag_links` and `ebook_tags`. `page` defaults to `1`; `limit` defaults
-to `10` and accepts values from `1` through `50`.
+to `10` and accepts values from `1` through `50`. The optional `q` keyword search splits on
+whitespace (up to 10 words); every word must appear in the ebook title or one of its tag
+labels, e.g. `GET /v1/ebooks?q=grace%20devotional`.
 
 ```json
 {

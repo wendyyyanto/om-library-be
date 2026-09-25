@@ -13,10 +13,23 @@ import {
 	Min,
 	ValidateIf
 } from "class-validator";
-import { PaginatedResponse } from "./PaginationDto";
+import { GetPaginationQueryDto, PaginatedResponse } from "./PaginationDto";
 
 function trim(value: unknown): unknown {
 	return typeof value === "string" ? value.trim() : value;
+}
+
+export class GetEbooksQueryDto extends GetPaginationQueryDto {
+	@IsOptional()
+	@Transform(({ value }) => {
+		const trimmed = trim(value);
+		return trimmed === "" ? undefined : trimmed;
+	})
+	@IsString({ message: "Search keyword must be text!" })
+	@MaxLength(255, {
+		message: "Search keyword must be at most 255 characters!"
+	})
+	q?: string;
 }
 
 export class GetEbookParamsDto {

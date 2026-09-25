@@ -18,10 +18,10 @@ import {
 	EbookDetailResponse,
 	EbooksListResponse,
 	GetEbookParamsDto,
+	GetEbooksQueryDto,
 	UpdateEbookDto,
 	UpdateEbookResponse
 } from "../dtos/EbookDto";
-import { GetPaginationQueryDto } from "../dtos/PaginationDto";
 import { EbookService } from "../services/EbookService";
 
 @Controller()
@@ -41,7 +41,7 @@ export class EbookController {
 	@Get("ebooks")
 	@HttpCode(HttpStatus.OK)
 	async list(
-		@Query() query: GetPaginationQueryDto
+		@Query() query: GetEbooksQueryDto
 	): Promise<EbooksListResponse> {
 		return this.ebookService.list(query);
 	}

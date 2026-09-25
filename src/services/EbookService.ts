@@ -20,18 +20,16 @@ import {
 	EbookListItemResponse,
 	EbooksListResponse,
 	EbookTagResponse,
+	GetEbooksQueryDto,
 	UpdateEbookDto,
 	UpdateEbookResponse
 } from "../dtos/EbookDto";
-import {
-	DEFAULT_LIMIT,
-	DEFAULT_PAGE,
-	GetPaginationQueryDto
-} from "../dtos/PaginationDto";
+import { DEFAULT_LIMIT, DEFAULT_PAGE } from "../dtos/PaginationDto";
 import { EbookEntity } from "../entities/EbookEntity";
 import { EbookTagEntity } from "../entities/EbookTagEntity";
 import { EbookTagLinkEntity } from "../entities/EbookTagLinkEntity";
 import { LibraryFileEntity } from "../entities/LibraryFileEntity";
+import { escapeLike } from "../utilities/escapeLike";
 import { TransactionRunner } from "../utilities/TransactionRunner";
 import { FilesService } from "./FilesService";
 
@@ -127,24 +125,47 @@ export class EbookService {
 		return { data: await this.getDetailData(ebookId) };
 	}
 
-	async list(query: GetPaginationQueryDto): Promise<EbooksListResponse> {
+	async list(query: GetEbooksQueryDto): Promise<EbooksListResponse> {
 		const page = query.page ?? DEFAULT_PAGE;
 		const limit = query.limit ?? DEFAULT_LIMIT;
-		const [ebooks, totalItems] = await this.ebooks.findAndCount({
-			select: {
-				id: true,
-				title: true,
-				author: true,
-				createdAt: true,
-				updatedAt: true,
-				coverFile: { id: true, url: true },
-				uploader: { id: true, name: true }
-			},
-			relations: { coverFile: true, uploader: true },
-			order: { createdAt: "DESC", id: "DESC" },
-			skip: (page - 1) * limit,
-			take: limit
+		const builder = this.ebooks
+			.createQueryBuilder("ebook")
+			.leftJoin("ebook.coverFile", "coverFile")
+			.innerJoin("ebook.uploader", "uploader")
+			.select([
+				"ebook.id",
+				"ebook.title",
+				"ebook.author",
+				"ebook.createdAt",
+				"ebook.updatedAt",
+				"coverFile.id",
+				"coverFile.url",
+				"uploader.id",
+				"uploader.name"
+			]);
+
+		// Every keyword must appear in the title or one of the ebook's tags, so
+		// "grace devotional" matches "Amazing Grace" tagged "Devotional".
+		const keywords =
+			query.q?.split(/\s+/).filter(Boolean).slice(0, 10) ?? [];
+		keywords.forEach((keyword, index) => {
+			const param = `keyword${index}`;
+			builder.andWhere(
+				`(ebook.title LIKE :${param} OR EXISTS (
+					SELECT 1 FROM ebook_tag_links link
+					INNER JOIN ebook_tags tag ON tag.id = link.tag_id
+					WHERE link.ebook_id = ebook.id AND tag.label LIKE :${param}
+				))`,
+				{ [param]: `%${escapeLike(keyword)}%` }
+			);
 		});
+
+		const [ebooks, totalItems] = await builder
+			.orderBy("ebook.createdAt", "DESC")
+			.addOrderBy("ebook.id", "DESC")
+			.skip((page - 1) * limit)
+			.take(limit)
+			.getManyAndCount();
 
 		const tagsByEbook = await this.getTagsByEbook(
 			ebooks.map((ebook) => ebook.id)
