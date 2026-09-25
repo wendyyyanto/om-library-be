@@ -168,6 +168,7 @@ export interface EbookListItemResponse {
 	id: string;
 	title: string;
 	author: string;
+	cover_url: string | null;
 	tags: EbookTagResponse[];
 	uploaded_by: EbookUploaderResponse;
 	created_at: string;

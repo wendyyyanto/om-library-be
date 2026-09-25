@@ -137,9 +137,10 @@ export class EbookService {
 				author: true,
 				createdAt: true,
 				updatedAt: true,
+				coverFile: { id: true, url: true },
 				uploader: { id: true, name: true }
 			},
-			relations: { uploader: true },
+			relations: { coverFile: true, uploader: true },
 			order: { createdAt: "DESC", id: "DESC" },
 			skip: (page - 1) * limit,
 			take: limit
@@ -381,6 +382,7 @@ export class EbookService {
 			id: ebook.id,
 			title: ebook.title,
 			author: ebook.author,
+			cover_url: ebook.coverFile?.url ?? null,
 			tags,
 			uploaded_by: {
 				id: ebook.uploader.id,
