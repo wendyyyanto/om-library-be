@@ -57,22 +57,12 @@ configuration is incomplete.
 
 ## Dropdowns
 
-`POST /v1/dropdown` reads dropdown options from an explicit server-side allowlist. It never
-accepts an arbitrary table or column. The first requested attribute is returned as `id` and
-the second as `name`. Results are distinct and require a bearer token.
-
-Allowed entities and attributes are:
-
-| Entity             | Attributes                        |
-| ------------------ | --------------------------------- |
-| `teaching_events`  | `id`, `name`                      |
-| `teachers`         | `id`, `name`                      |
-| `years`            | `id`, `year`                      |
-| `books`            | `id`, `bookName`, `totalChapters` |
-| `class_categories` | `id`, `label`                     |
-| `ebook_tags`       | `id`, `label`                     |
-| `library_roles`    | `id`, `name`                      |
-| `library_statuses` | `id`, `name`                      |
+`POST /v1/dropdown` reads dropdown options from any table of the database. `entity` must be an
+existing table name, and attributes, filter keys and sort keys must be existing columns of it
+(checked against `information_schema`, cached until restart). The secret columns
+`password_hash`, `token` and `refresh_token_hash` are always rejected. The first requested
+attribute is returned as `id` and the second as `name`. Results are distinct, sorted by `name`
+by default, and require a bearer token.
 
 An unpaginated request returns `{ "data": [...] }`:
 

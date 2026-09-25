@@ -1,10 +1,6 @@
 import { BadRequestException, HttpStatus, Injectable } from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource, ObjectLiteral, SelectQueryBuilder } from "typeorm";
-import {
-	DROPDOWN_RESOURCES,
-	DropdownResource
-} from "../constants/dropdown";
 import { ERROR_CODES } from "../constants/error-codes";
 import {
 	DropdownFilterDto,
@@ -29,21 +25,28 @@ const SQL_OPERATORS = {
 	lte: "<="
 } as const;
 
+const HIDDEN_COLUMNS = new Set(["password_hash", "token", "refresh_token_hash"]);
+
 @Injectable()
 export class DropdownService {
+	// ponytail: cached until restart, a schema change needs a redeploy anyway
+	private schemaCache?: Promise<Map<string, Set<string>>>;
+
 	constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
 
 	async getOptions(
 		dto: DropdownRequestDto
 	): Promise<DropdownResponse | PaginatedDropdownResponse> {
-		const resource = this.resource(dto.entity);
-		const idColumn = this.column(resource, dto.attributes[0]);
-		const nameColumn = this.column(resource, dto.attributes[1]);
+		const columns = (await this.schema()).get(dto.entity);
+		if (!columns)
+			throw this.invalid(`Dropdown entity "${dto.entity}" does not exist.`);
+		const idColumn = this.column(columns, dto.attributes[0]);
+		const nameColumn = this.column(columns, dto.attributes[1]);
 		const query = this.dataSource
 			.createQueryBuilder()
-			.from(resource.table, "dropdown");
+			.from(dto.entity, "dropdown");
 
-		this.applyFilters(query, resource, dto.filters ?? []);
+		this.applyFilters(query, columns, dto.filters ?? []);
 
 		const rowsQuery = query
 			.clone()
@@ -54,15 +57,12 @@ export class DropdownService {
 		const sorting = this.sorting(dto.sort_by);
 		if (sorting.length === 0) {
 			rowsQuery
-				.addOrderBy(
-					`dropdown.${this.column(resource, resource.defaultSort)}`,
-					"ASC"
-				)
+				.addOrderBy(`dropdown.${nameColumn}`, "ASC")
 				.addOrderBy(`dropdown.${idColumn}`, "ASC");
 		} else {
 			for (const [key, direction] of sorting)
 				rowsQuery.addOrderBy(
-					`dropdown.${this.column(resource, key)}`,
+					`dropdown.${this.column(columns, key)}`,
 					direction
 				);
 		}
@@ -95,26 +95,42 @@ export class DropdownService {
 		};
 	}
 
-	private resource(entity: string): DropdownResource {
-		if (!Object.hasOwn(DROPDOWN_RESOURCES, entity))
-			throw this.invalid(`Dropdown entity "${entity}" is not allowed.`);
-		const resource = DROPDOWN_RESOURCES[entity];
-		return resource;
+	// Table -> columns of the current database, read once from information_schema.
+	private schema(): Promise<Map<string, Set<string>>> {
+		this.schemaCache ??= this.dataSource
+			.query(
+				"SELECT TABLE_NAME AS tableName, COLUMN_NAME AS columnName FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()"
+			)
+			.then((rows: { tableName: string; columnName: string }[]) => {
+				const schema = new Map<string, Set<string>>();
+				for (const { tableName, columnName } of rows) {
+					if (!schema.has(tableName)) schema.set(tableName, new Set());
+					schema.get(tableName)?.add(columnName);
+				}
+				return schema;
+			})
+			.catch((error: unknown) => {
+				this.schemaCache = undefined;
+				throw error;
+			});
+		return this.schemaCache;
 	}
 
-	private column(resource: DropdownResource, key: string): string {
-		if (!Object.hasOwn(resource.columns, key))
-			throw this.invalid(`Dropdown attribute "${key}" is not allowed.`);
-		return resource.columns[key];
+	// Table and column names are interpolated into SQL, so only real ones pass;
+	// secret columns stay unreadable even though every table is open.
+	private column(columns: Set<string>, key: string): string {
+		if (!columns.has(key) || HIDDEN_COLUMNS.has(key))
+			throw this.invalid(`Dropdown attribute "${key}" does not exist.`);
+		return key;
 	}
 
 	private applyFilters(
 		query: SelectQueryBuilder<ObjectLiteral>,
-		resource: DropdownResource,
+		columns: Set<string>,
 		filters: DropdownFilterDto[]
 	): void {
 		filters.forEach((filter, index) => {
-			const identifier = `dropdown.${this.column(resource, filter.key)}`;
+			const identifier = `dropdown.${this.column(columns, filter.key)}`;
 			const parameter = `dropdown_filter_${index}`;
 			const condition = this.condition(identifier, parameter, filter);
 			const parameters = this.parameters(parameter, filter);
