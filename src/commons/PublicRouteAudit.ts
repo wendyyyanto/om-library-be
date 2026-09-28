@@ -4,10 +4,13 @@ import { DiscoveryService, Reflector } from "@nestjs/core";
 import { IS_PUBLIC_KEY } from "./Public";
 
 const ALLOWED_PUBLIC_ROUTES: ReadonlySet<string> = new Set([
+	"AnnouncementController.getById",
+	"AnnouncementController.list",
 	"AppController.health",
 	"AuthController.login",
 	"AuthController.refresh",
 	"AuthController.register",
+	"AuthController.verify",
 	"ClassController.getById",
 	"ClassController.list",
 	"EbookController.getById",
