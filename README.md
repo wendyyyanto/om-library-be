@@ -113,8 +113,9 @@ fields used by the list view and returns snake-case response keys:
 		{
 			"id": "550e8400-e29b-41d4-a716-446655440000",
 			"title": "Living by Faith",
-			"passage": "Hebrews 11",
+			"passage": "Hebrews",
 			"chapters": "11",
+			"verses": "1-6",
 			"category": "Topical Teaching",
 			"teacher": "John Doe",
 			"date": "2026-08-17T00:00:00.000Z",
@@ -132,6 +133,15 @@ fields used by the list view and returns snake-case response keys:
 	}
 }
 ```
+
+The optional `q` search treats a `<book> <chapter>` query such as `john 1` or `1 john 2` as
+a Bible reference: it returns teachings whose `passage` is that book and whose `chapters`
+include that exact chapter, so `john 1` does not match `John 11` or `1 John 1`. Any other
+query splits on whitespace (up to 10 words) and every word must appear in a text column;
+numeric words match whole numbers only. The `passage` filter matches the book exactly
+(`John` excludes `1 John`); `chapters` takes a list (`?chapters=1,2,3` or repeated
+`?chapters=1&chapters=2`) and returns teachings covering any of those chapters; `verses`
+matches a substring.
 
 Validation and other errors from this endpoint use `status_code` rather than
 `statusCode`, keeping every response key in snake case.
@@ -154,8 +164,9 @@ internal storage keys and file ownership are not exposed:
 	"data": {
 		"id": "550e8400-e29b-41d4-a716-446655440000",
 		"title": "Living by Faith",
-		"passage": "Romans 1:16-17",
+		"passage": "Romans",
 		"chapters": "1",
+		"verses": "16-17",
 		"category": "Topical Teaching",
 		"year": "2026",
 		"teacher": "John Doe",
@@ -199,7 +210,7 @@ returned with `url: null`. Invalid teaching ids return
 ```
 
 `POST /v1/teachings` creates a teaching with `title`, `passage`, `chapters`, `category`,
-`year`, `teacher` and `event` as required fields. At least one of `audio_file_id` or
+`year`, `teacher` and `event` as required fields; `verses` is optional and defaults to `null`. At least one of `audio_file_id` or
 `video_url` must be provided. `audio_file_id`, `pdf_file_id` and `ppt_file_id` reference
 previously uploaded library files and default to `null`. `category` accepts `New Testament`,
 `Old Testament`, `Topical Teaching` or `Workshop`. The server generates `id`, derives
@@ -209,8 +220,9 @@ cannot set those fields.
 ```json
 {
 	"title": "Living by Faith",
-	"passage": "Romans 1:16-17",
+	"passage": "Romans",
 	"chapters": "1",
+	"verses": "16-17",
 	"category": "New Testament",
 	"year": "2026",
 	"teacher": "John Doe",
@@ -249,8 +261,9 @@ unchanged, or send `null` to remove it:
 ```json
 {
 	"title": "Living by Faith — Revised",
-	"passage": "Romans 1:16-17",
+	"passage": "Romans",
 	"chapters": "1",
+	"verses": "16-17",
 	"category": "New Testament",
 	"year": "2026",
 	"teacher": "John Doe",

@@ -36,6 +36,7 @@ const SEARCHABLE_COLUMNS = [
 	"title",
 	"passage",
 	"chapters",
+	"verses",
 	"category",
 	"year",
 	"teacher",
@@ -72,6 +73,7 @@ export class TeachingsService {
 				title: dto.title,
 				passage: dto.passage,
 				chapters: dto.chapters,
+				verses: dto.verses ?? null,
 				category: dto.category,
 				year: dto.year,
 				teacher: dto.teacher,
@@ -91,9 +93,6 @@ export class TeachingsService {
 	async list(query: GetTeachingsQueryDto): Promise<TeachingsListResponse> {
 		const page = query.page ?? DEFAULT_TEACHINGS_PAGE;
 		const limit = query.limit ?? DEFAULT_TEACHINGS_LIMIT;
-		const pattern = query.q
-			? `%${query.q.replace(/[\\%_]/g, "\\$&")}%`
-			: undefined;
 
 		const builder = this.teachings
 			.createQueryBuilder("teaching")
@@ -104,6 +103,7 @@ export class TeachingsService {
 				"teaching.title",
 				"teaching.passage",
 				"teaching.chapters",
+				"teaching.verses",
 				"teaching.category",
 				"teaching.teacher",
 				"teaching.createdAt",
@@ -113,13 +113,16 @@ export class TeachingsService {
 				"thumbnail.thumbnailUrl"
 			]);
 
+		// Exact book, so "John" does not also return "1 John".
 		if (query.passage)
-			builder.andWhere("teaching.passage LIKE :passage", {
-				passage: `%${escapeLike(query.passage)}%`
+			builder.andWhere("teaching.passage = :passage", {
+				passage: query.passage
 			});
-		if (query.chapters)
-			builder.andWhere("teaching.chapters LIKE :chapters", {
-				chapters: `%${escapeLike(query.chapters)}%`
+		// Any of the requested chapters as a whole number: "1" matches "1" and
+		// "2, 1" but not "11". The DTO guarantees digits only.
+		if (query.chapters?.length)
+			builder.andWhere("teaching.chapters REGEXP :chapters", {
+				chapters: `(^|[^0-9])(${query.chapters.join("|")})([^0-9]|$)`
 			});
 		if (query.category)
 			builder.andWhere("teaching.category = :category", {
@@ -138,15 +141,43 @@ export class TeachingsService {
 				events: query.event
 			});
 
-		// Every keyword must appear in at least one text column, so "john acia"
-		// matches passage "John" taught by "Acia".
-		const keywords =
-			query.q?.split(/\s+/).filter(Boolean).slice(0, 10) ?? [];
+		if (query.verses)
+			builder.andWhere("teaching.verses LIKE :verses", {
+				verses: `%${escapeLike(query.verses)}%`
+			});
+
+		// "john 1" / "1 john 2" is a Bible reference: the passage is that book and
+		// the chapters list contains that exact chapter.
+		const reference = query.q?.match(
+			/^(\d?\s*[a-z][a-z .]*?)\s+(\d{1,3})$/i
+		);
+		if (reference) {
+			builder
+				.andWhere("teaching.passage = :book", {
+					book: reference[1].replace(/\s+/g, " ")
+				})
+				.andWhere("teaching.chapters REGEXP :chapter", {
+					chapter: `(^|[^0-9])${reference[2]}([^0-9]|$)`
+				});
+		}
+
+		// Otherwise every keyword must appear in at least one text column, so
+		// "john acia" matches passage "John" taught by "Acia". Numeric keywords
+		// match whole numbers only, so "2021" does not match "12021".
+		const keywords = reference
+			? []
+			: (query.q?.split(/\s+/).filter(Boolean).slice(0, 10) ?? []);
 		keywords.forEach((keyword, index) => {
 			const param = `keyword${index}`;
+			const numeric = /^\d+$/.test(keyword);
+			const operator = numeric ? "REGEXP" : "LIKE";
 			builder.andWhere(
-				`(${SEARCHABLE_COLUMNS.map((column) => `teaching.${column} LIKE :${param}`).join(" OR ")})`,
-				{ [param]: `%${escapeLike(keyword)}%` }
+				`(${SEARCHABLE_COLUMNS.map((column) => `teaching.${column} ${operator} :${param}`).join(" OR ")})`,
+				{
+					[param]: numeric
+						? `(^|[^0-9])${keyword}([^0-9]|$)`
+						: `%${escapeLike(keyword)}%`
+				}
 			);
 		});
 
@@ -181,6 +212,7 @@ export class TeachingsService {
 				"teaching.title",
 				"teaching.passage",
 				"teaching.chapters",
+				"teaching.verses",
 				"teaching.category",
 				"teaching.year",
 				"teaching.teacher",
@@ -286,6 +318,7 @@ export class TeachingsService {
 					title: dto.title,
 					passage: dto.passage,
 					chapters: dto.chapters,
+					verses: dto.verses ?? null,
 					category: dto.category,
 					year: dto.year,
 					teacher: dto.teacher,
@@ -436,6 +469,7 @@ export class TeachingsService {
 			title: teaching.title,
 			passage: teaching.passage,
 			chapters: teaching.chapters,
+			verses: teaching.verses,
 			category: teaching.category,
 			teacher: teaching.teacher,
 			date: teaching.createdAt.toISOString(),
@@ -455,6 +489,7 @@ export class TeachingsService {
 			title: teaching.title,
 			passage: teaching.passage,
 			chapters: teaching.chapters,
+			verses: teaching.verses,
 			category: teaching.category,
 			year: teaching.year,
 			teacher: teaching.teacher,
@@ -495,6 +530,7 @@ export class TeachingsService {
 			title: teaching.title,
 			passage: teaching.passage,
 			chapters: teaching.chapters,
+			verses: teaching.verses,
 			category: teaching.category,
 			year: teaching.year,
 			teacher: teaching.teacher,

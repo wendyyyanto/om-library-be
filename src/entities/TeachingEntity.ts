@@ -37,6 +37,9 @@ export class TeachingEntity {
 	@Column({ type: "varchar", length: 255 })
 	chapters: string;
 
+	@Column({ type: "varchar", length: 255, nullable: true })
+	verses: string | null;
+
 	@Column({ type: "enum", enum: TeachingCategory })
 	category: TeachingCategory;
 
