@@ -64,7 +64,12 @@ export class MobileAuthService {
 
 		if (await this.users.exists({ where: { email } })) throw this.emailTaken();
 		try {
-			await this.users.insert({ name, email, approvalStatus: MobileApprovalStatus.Pending });
+			await this.users.insert({
+				id: randomUUID(),
+				name,
+				email,
+				approvalStatus: MobileApprovalStatus.Pending
+			});
 		} catch (error) {
 			if (
 				error instanceof QueryFailedError &&

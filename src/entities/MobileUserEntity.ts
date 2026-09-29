@@ -1,4 +1,4 @@
-import { Column, Entity, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, PrimaryColumn } from "typeorm";
 
 export enum MobileApprovalStatus {
 	Pending = 0,
@@ -9,8 +9,9 @@ export enum MobileApprovalStatus {
 /** Mobile app accounts (`Platform: Mobile`). Separate from `library_users`. */
 @Entity({ name: "users" })
 export class MobileUserEntity {
-	@PrimaryGeneratedColumn()
-	id: number;
+	/** UUID v4, generated in the app: MariaDB 10.11's `UUID()` is v1. */
+	@PrimaryColumn({ type: "char", length: 36 })
+	id: string;
 
 	@Column({ type: "varchar", length: 255, nullable: true })
 	name: string | null;
