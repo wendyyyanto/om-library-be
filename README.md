@@ -24,7 +24,7 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `POST`   | `/v1/auth/login`    | public | bcrypt password, returns `{ user, accessToken, refreshToken }`.  |
 | `POST`   | `/v1/auth/refresh`  | public | Rotates a refresh token and returns a new token pair.            |
 | `POST`   | `/v1/auth/logout`   | bearer | `204`, no body. Revokes by cutoff — see below.                   |
-| `GET`    | `/v1/profile`       | bearer | The caller's own account.                                        |
+| `GET`    | `/v1/profile`       | bearer | The caller's own account. `Platform: Mobile` + mobile JWT → `{ name, email }`. |
 | `PATCH`  | `/v1/profile`       | bearer | `name` for anyone; `role`/`status` admin-only.                   |
 | `POST`   | `/v1/dropdown`      | bearer | Read allowlisted database values as `{ id, name }` options.      |
 | `GET`    | `/v1/teachings`     | bearer | Paginated teaching list, newest first.                           |

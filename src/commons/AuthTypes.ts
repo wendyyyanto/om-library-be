@@ -1,5 +1,6 @@
 import { Request } from 'express';
 import { UserRole } from '../constants/library';
+import { MobileUserEntity } from '../entities/MobileUserEntity';
 
 /** What `JwtAuthGuard` attaches to the request. Never trust anything else for identity. */
 export interface AuthenticatedUser {
@@ -19,4 +20,6 @@ export interface JwtPayload {
 
 export interface AuthenticatedRequest extends Request {
   user?: AuthenticatedUser;
+  /** Set instead of `user` on `@AllowMobile()` routes called with `Platform: Mobile`. */
+  mobileUser?: MobileUserEntity;
 }

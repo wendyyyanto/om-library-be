@@ -12,6 +12,8 @@ import { ERROR_CODES } from "../constants/error-codes";
 import { UserRole } from "../constants/library";
 import { AuthSessionEntity } from "../entities/AuthSessionEntity";
 import { LibraryUserEntity } from "../entities/LibraryUserEntity";
+import { MobileAuthService } from "../services/MobileAuthService";
+import { ALLOW_MOBILE_KEY } from "./AllowMobile";
 import { AuthenticatedRequest, JwtPayload } from "./AuthTypes";
 import { IS_PUBLIC_KEY } from "./Public";
 
@@ -23,7 +25,8 @@ export class JwtAuthGuard implements CanActivate {
 		@InjectRepository(LibraryUserEntity)
 		private readonly users: Repository<LibraryUserEntity>,
 		@InjectRepository(AuthSessionEntity)
-		private readonly sessions: Repository<AuthSessionEntity>
+		private readonly sessions: Repository<AuthSessionEntity>,
+		private readonly mobileAuth: MobileAuthService
 	) {}
 
 	async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -38,6 +41,13 @@ export class JwtAuthGuard implements CanActivate {
 			.getRequest<AuthenticatedRequest>();
 		const token = this.extractToken(request);
 		if (!token) throw this.unauthorized();
+
+		if (this.isMobile(request, context)) {
+			const result = await this.mobileAuth.verify(token);
+			if (!result.ok) throw this.unauthorized();
+			request.mobileUser = result.user;
+			return true;
+		}
 
 		let payload: JwtPayload;
 		try {
@@ -77,6 +87,15 @@ export class JwtAuthGuard implements CanActivate {
 			select: { id: true, expiresAt: true }
 		});
 		return !session || session.expiresAt.getTime() <= Date.now();
+	}
+
+	private isMobile(request: AuthenticatedRequest, context: ExecutionContext): boolean {
+		const platform = request.headers.platform;
+		return (
+			typeof platform === "string" &&
+			platform.trim().toLowerCase() === "mobile" &&
+			this.reflector.get<boolean>(ALLOW_MOBILE_KEY, context.getHandler()) === true
+		);
 	}
 
 	private extractToken(request: AuthenticatedRequest): string | null {
