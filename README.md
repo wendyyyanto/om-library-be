@@ -52,7 +52,7 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `FILE_UPLOAD_MAX_BYTES`                           | no       | `10485760` (10 MiB)                        |
 | `MOBILE_JWT_SECRET`                               | **yes**  | none — the app refuses to start without it |
 | `MOBILE_JWT_EXPIRES_IN`                           | no       | none — mobile JWTs never expire            |
-| `API_BASE_URL`                                    | **yes**  | — (login links have no host without it)    |
+| `MOBILE_LOGIN_LINK_URL`                           | no       | `https://mobile.organic-ministry.org/auth` |
 | `RESEND_API_KEY`                                  | **yes**  | — (mobile login returns 500 without it)    |
 | `MAIL_FROM`                                       | no       | `OM Mobile App <onboarding@resend.dev>`    |
 | `APP_DEEP_LINK_SCHEME`                            | no       | `ommobileapp://auth`                       |
@@ -63,8 +63,8 @@ general Cloudflare REST API bearer token. The app refuses to start if the requir
 configuration is incomplete.
 
 Mobile login emails a magic link through [Resend](https://resend.com) pointing at
-`API_BASE_URL/v1/auth/verify`, so `API_BASE_URL` must be reachable from the phone (not
-`localhost`). The default `MAIL_FROM` sender only delivers to the Resend account owner's address;
+`MOBILE_LOGIN_LINK_URL?token=...`; that page (or the app via a universal/app link) hands the
+token to the app, which can still call `/v1/auth/verify`. The default `MAIL_FROM` sender only delivers to the Resend account owner's address;
 verify a domain in Resend and send from it to reach other users. `AUTH_DEBUG_MODE=true` makes
 `/v1/auth/verify` show the JWT in a page instead of redirecting to `APP_DEEP_LINK_SCHEME`.
 

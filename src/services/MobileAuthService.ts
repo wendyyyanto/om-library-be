@@ -105,9 +105,10 @@ export class MobileAuthService {
 		);
 		await this.users.update({ id: user.id }, { token });
 
-		const baseUrl = (this.config.get<string>("API_BASE_URL") ?? "").replace(/\/+$/, "");
+		const linkUrl =
+			this.config.get<string>("MOBILE_LOGIN_LINK_URL") || "https://mobile.organic-ministry.org/auth";
 		try {
-			await this.sendMagicLink(email, `${baseUrl}/v1/auth/verify?token=${encodeURIComponent(token)}`);
+			await this.sendMagicLink(email, `${linkUrl}?token=${encodeURIComponent(token)}`);
 		} catch (error) {
 			this.logger.error(`Failed to send login link: ${(error as Error).message}`);
 			throw new InternalServerErrorException({ message: "Failed to send login link" });
