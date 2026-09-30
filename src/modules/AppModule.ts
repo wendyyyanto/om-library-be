@@ -4,13 +4,13 @@ import { APP_FILTER, APP_PIPE, DiscoveryModule } from "@nestjs/core";
 import { MysqlExceptionFilter } from "../commons/MysqlExceptionFilter";
 import { createValidationPipe } from "../commons/ValidationPipe";
 import { AppController } from "../controllers/AppController";
-import { AnnouncementModule } from "./AnnouncementModule";
 import { AuthModule } from "./AuthModule";
 import { ClassModule } from "./ClassModule";
 import { DatabaseModule } from "./DatabaseModule";
 import { DropdownModule } from "./DropdownModule";
 import { EbookModule } from "./EbookModule";
 import { FilesModule } from "./FilesModule";
+import { NotificationModule } from "./NotificationModule";
 import { ProfileModule } from "./ProfileModule";
 import { TeachingsModule } from "./TeachingsModule";
 
@@ -19,12 +19,12 @@ import { TeachingsModule } from "./TeachingsModule";
 		ConfigModule.forRoot({ isGlobal: true }),
 		DiscoveryModule,
 		DatabaseModule,
-		AnnouncementModule,
 		AuthModule,
 		DropdownModule,
 		ClassModule,
 		EbookModule,
 		FilesModule,
+		NotificationModule,
 		ProfileModule,
 		TeachingsModule
 	],

@@ -34,6 +34,10 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `DELETE` | `/v1/teachings/:id` | bearer | Hard-delete an owned teaching and its unshared files.            |
 | `POST`   | `/v1/files`         | bearer | Upload one `multipart/form-data` field named `file` to R2.       |
 | `DELETE` | `/v1/files`         | bearer | Delete the caller's uploaded file using `{ "file_id": "UUID" }`. |
+| `GET`    | `/v1/notifications`     | public | Paginated notification list, latest `event_date` first.      |
+| `GET`    | `/v1/notifications/:id` | public | Notification detail.                                         |
+| `POST`   | `/v1/notifications`     | admin  | Save a notification and push it to its OneSignal segment.    |
+| `DELETE` | `/v1/notifications/:id` | admin  | Delete a notification and its thumbnail if unreferenced.     |
 
 ## Environment
 
@@ -57,6 +61,7 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `MAIL_FROM`                                       | no       | `OM Mobile App <onboarding@resend.dev>`    |
 | `APP_DEEP_LINK_SCHEME`                            | no       | `ommobileapp://auth`                       |
 | `AUTH_DEBUG_MODE`                                 | no       | `false`                                    |
+| `ONESIGNAL_APP_ID` / `ONESIGNAL_API_KEY`          | **yes**  | none — the app refuses to start without them |
 
 The R2 credentials use an R2 API token's S3 access key id and secret access key, not a
 general Cloudflare REST API bearer token. The app refuses to start if the required R2
@@ -67,6 +72,51 @@ Mobile login emails a magic link through [Resend](https://resend.com) pointing a
 token to the app, which can still call `/v1/auth/verify`. The default `MAIL_FROM` sender only delivers to the Resend account owner's address;
 verify a domain in Resend and send from it to reach other users. `AUTH_DEBUG_MODE=true` makes
 `/v1/auth/verify` show the JWT in a page instead of redirecting to `APP_DEEP_LINK_SCHEME`.
+
+## Notifications
+
+Push notifications are sent through the [OneSignal REST API](https://documentation.onesignal.com/reference/push-notification)
+from the server only — the App API key must never reach a client.
+
+`POST /v1/notifications` (admin) takes:
+
+```json
+{
+	"segment_id": 1,
+	"title": "Youth retreat",
+	"description": "Registration closes Friday.",
+	"thumbnail_file_id": "550e8400-e29b-41d4-a716-446655440000",
+	"event_date": "2026-10-12T09:00:00+07:00"
+}
+```
+
+- `segment_id` points at `notification_segments`. Each row's `name` is sent as-is in
+  `included_segments`, so it must match a OneSignal dashboard segment exactly. Admin UIs can
+  list segments through `POST /v1/dropdown` with `entity: "notification_segments"`.
+- `thumbnail_file_id` is optional and must be an `image/*` file uploaded through
+  `POST /v1/files`; its public URL becomes the push image. `DELETE /v1/files` returns
+  `409` while a notification still uses it.
+- The row is saved before the push is sent. A OneSignal failure, timeout, or a segment with
+  no subscribers is logged and does not fail the request — the row keeps
+  `onesignal_id = NULL`, which is how to find unsent notifications. The notification id is
+  sent as OneSignal's `idempotency_key` and as `data.notification_id` for the app to deep-link.
+
+`GET /v1/notifications` accepts `page`, `limit`, `segment_id` and `q` (title search).
+Each item has the shape of the detail response:
+
+```json
+{
+	"id": "UUID",
+	"title": "Youth retreat",
+	"description": "Registration closes Friday.",
+	"event_date": "2026-10-12T02:00:00.000Z",
+	"segment": { "id": 1, "name": "MG Yopro" },
+	"thumbnail": { "id": "UUID", "url": "https://assets.organic-ministry.org/..." },
+	"onesignal_id": "UUID",
+	"created_at": "…",
+	"updated_at": "…"
+}
+```
 
 ## Dropdowns
 
