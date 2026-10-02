@@ -13,7 +13,7 @@ import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
 import { isEmail } from "class-validator";
 import { randomUUID } from "node:crypto";
-import { Like, QueryFailedError, Repository } from "typeorm";
+import { IsNull, Like, Not, QueryFailedError, Repository } from "typeorm";
 import { MYSQL_ERROR } from "../constants/error-codes";
 import {
 	DEFAULT_LIMIT,
@@ -69,13 +69,18 @@ export class MobileAuthService {
 		if (!name || !isEmail(email))
 			throw new HttpException({ message: "name and email must be filled" }, HttpStatus.BAD_REQUEST);
 
-		if (await this.users.exists({ where: { email } })) throw this.emailTaken();
+		// withDeleted: a soft-deleted account still owns its email.
+		if (await this.users.exists({ where: { email }, withDeleted: true }))
+			throw this.emailTaken();
+		const now = new Date();
 		try {
 			await this.users.insert({
 				id: randomUUID(),
 				name,
 				email,
-				approvalStatus: MobileApprovalStatus.Pending
+				approvalStatus: MobileApprovalStatus.Pending,
+				createdAt: now,
+				updatedAt: now
 			});
 		} catch (error) {
 			if (
@@ -130,13 +135,25 @@ export class MobileAuthService {
 	): Promise<PaginatedResponse<MobileUserResponse>> {
 		const page = query.page ?? DEFAULT_PAGE;
 		const limit = query.limit ?? DEFAULT_LIMIT;
+		const disabled = query.is_disabled === 1;
 
 		const [rows, totalItems] = await this.users.findAndCount({
-			select: { id: true, name: true, email: true, approvalStatus: true },
+			select: {
+				id: true,
+				name: true,
+				email: true,
+				approvalStatus: true,
+				joinedAt: true,
+				updatedAt: true,
+				deletedAt: true
+			},
 			where: {
 				approvalStatus: query.approval_status,
-				name: query.name ? Like(`%${escapeLike(query.name)}%`) : undefined
+				name: query.name ? Like(`%${escapeLike(query.name)}%`) : undefined,
+				deletedAt: disabled ? Not(IsNull()) : undefined
 			},
+			// Without withDeleted, TypeORM always hides soft-deleted rows.
+			withDeleted: disabled,
 			order: { email: "ASC" },
 			skip: (page - 1) * limit,
 			take: limit
@@ -147,7 +164,10 @@ export class MobileAuthService {
 				id: row.id,
 				name: row.name,
 				email: row.email,
-				approval_status: row.approvalStatus
+				approval_status: row.approvalStatus,
+				joined_at: row.joinedAt,
+				updated_at: row.updatedAt.toISOString(),
+				deleted_at: row.deletedAt?.toISOString() ?? null
 			})),
 			pagination: {
 				page,
@@ -163,9 +183,25 @@ export class MobileAuthService {
 		id: string,
 		isApproved: number
 	): Promise<{ id: string; approval_status: number }> {
-		const { affected } = await this.users.update({ id }, { approvalStatus: isApproved });
+		const { affected } = await this.users.update(
+			{ id, deletedAt: IsNull() },
+			{
+				approvalStatus: isApproved,
+				// COALESCE keeps the first approval date when an approved user is approved again.
+				joinedAt:
+					isApproved === MobileApprovalStatus.Approved
+						? () => "COALESCE(joined_at, CURRENT_DATE)"
+						: null
+			}
+		);
 		if (!affected) throw new NotFoundException({ message: "User not found" });
 		return { id, approval_status: isApproved };
+	}
+
+	/** Soft delete: sets `deleted_at`; login, verify and listing then skip the row. */
+	async softDeleteUser(id: string): Promise<void> {
+		const { affected } = await this.users.softDelete({ id, deletedAt: IsNull() });
+		if (!affected) throw new NotFoundException({ message: "User not found" });
 	}
 
 	async verify(token: string): Promise<MobileVerifyResult> {
