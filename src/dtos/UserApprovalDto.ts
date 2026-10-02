@@ -8,6 +8,11 @@ export interface MobileUserResponse {
 	name: string | null;
 	email: string;
 	approval_status: number;
+	/** `YYYY-MM-DD`; null until approved. */
+	joined_at: string | null;
+	updated_at: string;
+	/** Set only for disabled (soft-deleted) accounts. */
+	deleted_at: string | null;
 }
 
 export class GetUsersQueryDto extends GetPaginationQueryDto {
@@ -20,6 +25,15 @@ export class GetUsersQueryDto extends GetPaginationQueryDto {
 		message: "approval_status must be 0 (pending), 1 (approved), or 2 (rejected)!"
 	})
 	approval_status?: MobileApprovalStatus;
+
+	/** 1 lists only disabled (soft-deleted) accounts; 0 or omitted lists active ones. */
+	@IsOptional()
+	@Transform(({ value }) =>
+		typeof value !== "string" ? value : value.trim() === "" ? undefined : Number(value)
+	)
+	@IsInt({ message: "is_disabled must be an integer!" })
+	@IsIn([0, 1], { message: "is_disabled must be 0 or 1!" })
+	is_disabled?: number;
 
 	@IsOptional()
 	@Transform(({ value }) =>
