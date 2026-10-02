@@ -8,6 +8,7 @@ import { JwtAuthGuard } from "../commons/JwtAuthGuard";
 import { RolesGuard } from "../commons/RolesGuard";
 import { AuthController } from "../controllers/AuthController";
 import { UserApprovalController } from "../controllers/UserApprovalController";
+import { UsersController } from "../controllers/UsersController";
 import { AuthSessionEntity } from "../entities/AuthSessionEntity";
 import { LibraryUserEntity } from "../entities/LibraryUserEntity";
 import { MobileUserEntity } from "../entities/MobileUserEntity";
@@ -40,7 +41,7 @@ import { PasswordHasher } from "../utilities/PasswordHasher";
 			}
 		})
 	],
-	controllers: [AuthController, UserApprovalController],
+	controllers: [AuthController, UserApprovalController, UsersController],
 	providers: [
 		AuthService,
 		MobileAuthService,

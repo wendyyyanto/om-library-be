@@ -13,8 +13,15 @@ import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
 import { isEmail } from "class-validator";
 import { randomUUID } from "node:crypto";
-import { QueryFailedError, Repository } from "typeorm";
+import { Like, QueryFailedError, Repository } from "typeorm";
 import { MYSQL_ERROR } from "../constants/error-codes";
+import {
+	DEFAULT_LIMIT,
+	DEFAULT_PAGE,
+	PaginatedResponse
+} from "../dtos/PaginationDto";
+import { GetUsersQueryDto, MobileUserResponse } from "../dtos/UserApprovalDto";
+import { escapeLike } from "../utilities/escapeLike";
 import {
 	MobileApprovalStatus,
 	MobileUserEntity
@@ -115,6 +122,40 @@ export class MobileAuthService {
 		}
 
 		return { message: "Link has been sent to your email" };
+	}
+
+	/** Explicit `select` keeps the login `token` column out of the response. */
+	async listUsers(
+		query: GetUsersQueryDto
+	): Promise<PaginatedResponse<MobileUserResponse>> {
+		const page = query.page ?? DEFAULT_PAGE;
+		const limit = query.limit ?? DEFAULT_LIMIT;
+
+		const [rows, totalItems] = await this.users.findAndCount({
+			select: { id: true, name: true, email: true, approvalStatus: true },
+			where: {
+				approvalStatus: query.approval_status,
+				name: query.name ? Like(`%${escapeLike(query.name)}%`) : undefined
+			},
+			order: { email: "ASC" },
+			skip: (page - 1) * limit,
+			take: limit
+		});
+
+		return {
+			data: rows.map((row) => ({
+				id: row.id,
+				name: row.name,
+				email: row.email,
+				approval_status: row.approvalStatus
+			})),
+			pagination: {
+				page,
+				limit,
+				total_items: totalItems,
+				total_pages: Math.ceil(totalItems / limit)
+			}
+		};
 	}
 
 	/** `isApproved` is 0 or 1 (validated by the DTO), mapping to Pending / Approved. */
