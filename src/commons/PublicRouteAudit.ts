@@ -7,7 +7,16 @@ const ALLOWED_PUBLIC_ROUTES: ReadonlySet<string> = new Set([
 	"AppController.health",
 	"AuthController.login",
 	"AuthController.refresh",
-	"AuthController.register"
+	"AuthController.register",
+	"AuthController.verify",
+	"ClassController.getById",
+	"ClassController.list",
+	"EbookController.getById",
+	"EbookController.list",
+	"NotificationController.getById",
+	"NotificationController.list",
+	"TeachingsController.getById",
+	"TeachingsController.list"
 ]);
 
 export function assertNoUnexpectedPublicRoutes(app: INestApplication): void {

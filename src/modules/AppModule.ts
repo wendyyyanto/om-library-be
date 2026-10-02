@@ -10,6 +10,7 @@ import { DatabaseModule } from "./DatabaseModule";
 import { DropdownModule } from "./DropdownModule";
 import { EbookModule } from "./EbookModule";
 import { FilesModule } from "./FilesModule";
+import { NotificationModule } from "./NotificationModule";
 import { ProfileModule } from "./ProfileModule";
 import { TeachingsModule } from "./TeachingsModule";
 
@@ -23,6 +24,7 @@ import { TeachingsModule } from "./TeachingsModule";
 		ClassModule,
 		EbookModule,
 		FilesModule,
+		NotificationModule,
 		ProfileModule,
 		TeachingsModule
 	],

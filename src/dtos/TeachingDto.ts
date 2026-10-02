@@ -7,6 +7,7 @@ import {
 	IsOptional,
 	IsString,
 	IsUrl,
+	Matches,
 	MaxLength,
 	IsUUID,
 	ValidateIf,
@@ -125,11 +126,30 @@ export class GetTeachingsQueryDto {
 	@MaxLength(255, { message: "Passage must be at most 255 characters!" })
 	passage?: string;
 
+	// `?chapters=1,2,3` and `?chapters=1&chapters=2` both become ["1", "2", ...].
+	@IsOptional()
+	@Transform(({ value }) =>
+		toTrimmedArray(
+			[value]
+				.flat()
+				.flatMap((item) =>
+					typeof item === "string" ? item.split(",") : [item]
+				)
+		)
+	)
+	@IsArray({ message: "Chapters must be an array!" })
+	@ArrayMaxSize(150, { message: "At most 150 chapters are allowed!" })
+	@Matches(/^\d{1,3}$/, {
+		each: true,
+		message: "Each chapter must be a number!"
+	})
+	chapters?: string[];
+
 	@IsOptional()
 	@Transform(({ value }) => trimOptional(value))
-	@IsString({ message: "Chapters must be text!" })
-	@MaxLength(255, { message: "Chapters must be at most 255 characters!" })
-	chapters?: string;
+	@IsString({ message: "Verses must be text!" })
+	@MaxLength(255, { message: "Verses must be at most 255 characters!" })
+	verses?: string;
 
 	@IsOptional()
 	@Transform(({ value }) => trimOptional(value))
@@ -178,6 +198,12 @@ export class CreateTeachingDto {
 	@Transform(({ value }) => trim(value))
 	@IsRequiredString("Chapters", 255)
 	chapters: string;
+
+	@IsOptional()
+	@Transform(({ value }) => trimOptional(value))
+	@IsString({ message: "Verses must be text!" })
+	@MaxLength(255, { message: "Verses must be at most 255 characters!" })
+	verses?: string | null;
 
 	@Transform(({ value }) => trim(value))
 	@IsEnum(TeachingCategory, { message: CATEGORY_MESSAGE })
@@ -235,6 +261,12 @@ export class UpdateTeachingDto {
 	@Transform(({ value }) => trim(value))
 	@IsRequiredString("Chapters", 255)
 	chapters: string;
+
+	@IsOptional()
+	@Transform(({ value }) => trimOptional(value))
+	@IsString({ message: "Verses must be text!" })
+	@MaxLength(255, { message: "Verses must be at most 255 characters!" })
+	verses?: string | null;
 
 	@Transform(({ value }) => trim(value))
 	@IsEnum(TeachingCategory, { message: CATEGORY_MESSAGE })
@@ -306,9 +338,11 @@ export interface TeachingListItemResponse {
 	title: string;
 	passage: string;
 	chapters: string;
+	verses: string | null;
 	category: TeachingCategory;
 	teacher: string;
 	date: string;
+	thumbnail_url: string | null;
 	uploaded_by: TeachingUploaderResponse;
 }
 
@@ -337,6 +371,7 @@ export interface TeachingDetailDataResponse {
 	title: string;
 	passage: string;
 	chapters: string;
+	verses: string | null;
 	category: TeachingCategory;
 	year: string;
 	teacher: string;
@@ -345,6 +380,7 @@ export interface TeachingDetailDataResponse {
 	video_url: string | null;
 	pdf_file: TeachingFileResponse | null;
 	ppt_file: TeachingFileResponse | null;
+	thumbnail_url: string | null;
 	created_at: string;
 	updated_at: string;
 	uploaded_by: TeachingUploaderResponse;
@@ -359,6 +395,7 @@ export interface CreatedTeachingResponse {
 	title: string;
 	passage: string;
 	chapters: string;
+	verses: string | null;
 	category: TeachingCategory;
 	year: string;
 	teacher: string;

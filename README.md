@@ -24,7 +24,7 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `POST`   | `/v1/auth/login`    | public | bcrypt password, returns `{ user, accessToken, refreshToken }`.  |
 | `POST`   | `/v1/auth/refresh`  | public | Rotates a refresh token and returns a new token pair.            |
 | `POST`   | `/v1/auth/logout`   | bearer | `204`, no body. Revokes by cutoff — see below.                   |
-| `GET`    | `/v1/profile`       | bearer | The caller's own account.                                        |
+| `GET`    | `/v1/profile`       | bearer | The caller's own account. `Platform: Mobile` + mobile JWT → `{ name, email }`. |
 | `PATCH`  | `/v1/profile`       | bearer | `name` for anyone; `role`/`status` admin-only.                   |
 | `POST`   | `/v1/dropdown`      | bearer | Read allowlisted database values as `{ id, name }` options.      |
 | `GET`    | `/v1/teachings`     | bearer | Paginated teaching list, newest first.                           |
@@ -34,6 +34,10 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `DELETE` | `/v1/teachings/:id` | bearer | Hard-delete an owned teaching and its unshared files.            |
 | `POST`   | `/v1/files`         | bearer | Upload one `multipart/form-data` field named `file` to R2.       |
 | `DELETE` | `/v1/files`         | bearer | Delete the caller's uploaded file using `{ "file_id": "UUID" }`. |
+| `GET`    | `/v1/notifications`     | public | Paginated notification list, latest `event_date` first.      |
+| `GET`    | `/v1/notifications/:id` | public | Notification detail.                                         |
+| `POST`   | `/v1/notifications`     | admin  | Save a notification and push it to its OneSignal segment.    |
+| `DELETE` | `/v1/notifications/:id` | admin  | Delete a notification and its thumbnail if unreferenced.     |
 
 ## Environment
 
@@ -50,29 +54,78 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `R2_SECRET_ACCESS_KEY`                            | **yes**  | —                                          |
 | `R2_BUCKET_NAME`                                  | **yes**  | —                                          |
 | `FILE_UPLOAD_MAX_BYTES`                           | no       | `10485760` (10 MiB)                        |
+| `MOBILE_JWT_SECRET`                               | **yes**  | none — the app refuses to start without it |
+| `MOBILE_JWT_EXPIRES_IN`                           | no       | none — mobile JWTs never expire            |
+| `MOBILE_LOGIN_LINK_URL`                           | no       | `https://mobile.organic-ministry.org/auth` |
+| `RESEND_API_KEY`                                  | **yes**  | — (mobile login returns 500 without it)    |
+| `MAIL_FROM`                                       | no       | `OM Mobile App <onboarding@resend.dev>`    |
+| `APP_DEEP_LINK_SCHEME`                            | no       | `ommobileapp://auth`                       |
+| `AUTH_DEBUG_MODE`                                 | no       | `false`                                    |
+| `ONESIGNAL_APP_ID` / `ONESIGNAL_API_KEY`          | **yes**  | none — the app refuses to start without them |
 
 The R2 credentials use an R2 API token's S3 access key id and secret access key, not a
 general Cloudflare REST API bearer token. The app refuses to start if the required R2
 configuration is incomplete.
 
+Mobile login emails a magic link through [Resend](https://resend.com) pointing at
+`MOBILE_LOGIN_LINK_URL?token=...`; that page (or the app via a universal/app link) hands the
+token to the app, which can still call `/v1/auth/verify`. The default `MAIL_FROM` sender only delivers to the Resend account owner's address;
+verify a domain in Resend and send from it to reach other users. `AUTH_DEBUG_MODE=true` makes
+`/v1/auth/verify` show the JWT in a page instead of redirecting to `APP_DEEP_LINK_SCHEME`.
+
+## Notifications
+
+Push notifications are sent through the [OneSignal REST API](https://documentation.onesignal.com/reference/push-notification)
+from the server only — the App API key must never reach a client.
+
+`POST /v1/notifications` (admin) takes:
+
+```json
+{
+	"segment_id": 1,
+	"title": "Youth retreat",
+	"description": "Registration closes Friday.",
+	"thumbnail_file_id": "550e8400-e29b-41d4-a716-446655440000",
+	"event_date": "2026-10-12T09:00:00+07:00"
+}
+```
+
+- `segment_id` points at `notification_segments`. Each row's `name` is sent as-is in
+  `included_segments`, so it must match a OneSignal dashboard segment exactly. Admin UIs can
+  list segments through `POST /v1/dropdown` with `entity: "notification_segments"`.
+- `thumbnail_file_id` is optional and must be an `image/*` file uploaded through
+  `POST /v1/files`; its public URL becomes the push image. `DELETE /v1/files` returns
+  `409` while a notification still uses it.
+- The row is saved before the push is sent. A OneSignal failure, timeout, or a segment with
+  no subscribers is logged and does not fail the request — the row keeps
+  `onesignal_id = NULL`, which is how to find unsent notifications. The notification id is
+  sent as OneSignal's `idempotency_key` and as `data.notification_id` for the app to deep-link.
+
+`GET /v1/notifications` accepts `page`, `limit`, `segment_id` and `q` (title search).
+Each item has the shape of the detail response:
+
+```json
+{
+	"id": "UUID",
+	"title": "Youth retreat",
+	"description": "Registration closes Friday.",
+	"event_date": "2026-10-12T02:00:00.000Z",
+	"segment": { "id": 1, "name": "MG Yopro" },
+	"thumbnail": { "id": "UUID", "url": "https://assets.organic-ministry.org/..." },
+	"onesignal_id": "UUID",
+	"created_at": "…",
+	"updated_at": "…"
+}
+```
+
 ## Dropdowns
 
-`POST /v1/dropdown` reads dropdown options from an explicit server-side allowlist. It never
-accepts an arbitrary table or column. The first requested attribute is returned as `id` and
-the second as `name`. Results are distinct and require a bearer token.
-
-Allowed entities and attributes are:
-
-| Entity               | Attributes                         |
-| -------------------- | ---------------------------------- |
-| `teaching_events`    | `id`, `name`                       |
-| `teachers`           | `id`, `name`                       |
-| `years`              | `id`, `year`                       |
-| `books`              | `id`, `bookName`, `totalChapters`  |
-| `class_categories`   | `id`, `label`                      |
-| `ebook_tags`         | `id`, `label`                      |
-| `library_roles`      | `id`, `name`                       |
-| `library_statuses`   | `id`, `name`                       |
+`POST /v1/dropdown` reads dropdown options from any table of the database. `entity` must be an
+existing table name, and attributes, filter keys and sort keys must be existing columns of it
+(checked against `information_schema`, cached until restart). The secret columns
+`password_hash`, `token` and `refresh_token_hash` are always rejected. The first requested
+attribute is returned as `id` and the second as `name`. Results are distinct, sorted by `name`
+by default, and require a bearer token.
 
 An unpaginated request returns `{ "data": [...] }`:
 
@@ -123,8 +176,9 @@ fields used by the list view and returns snake-case response keys:
 		{
 			"id": "550e8400-e29b-41d4-a716-446655440000",
 			"title": "Living by Faith",
-			"passage": "Hebrews 11",
+			"passage": "Hebrews",
 			"chapters": "11",
+			"verses": "1-6",
 			"category": "Topical Teaching",
 			"teacher": "John Doe",
 			"date": "2026-08-17T00:00:00.000Z",
@@ -142,6 +196,15 @@ fields used by the list view and returns snake-case response keys:
 	}
 }
 ```
+
+The optional `q` search treats a `<book> <chapter>` query such as `john 1` or `1 john 2` as
+a Bible reference: it returns teachings whose `passage` is that book and whose `chapters`
+include that exact chapter, so `john 1` does not match `John 11` or `1 John 1`. Any other
+query splits on whitespace (up to 10 words) and every word must appear in a text column;
+numeric words match whole numbers only. The `passage` filter matches the book exactly
+(`John` excludes `1 John`); `chapters` takes a list (`?chapters=1,2,3` or repeated
+`?chapters=1&chapters=2`) and returns teachings covering any of those chapters; `verses`
+matches a substring.
 
 Validation and other errors from this endpoint use `status_code` rather than
 `statusCode`, keeping every response key in snake case.
@@ -164,8 +227,9 @@ internal storage keys and file ownership are not exposed:
 	"data": {
 		"id": "550e8400-e29b-41d4-a716-446655440000",
 		"title": "Living by Faith",
-		"passage": "Romans 1:16-17",
+		"passage": "Romans",
 		"chapters": "1",
+		"verses": "16-17",
 		"category": "Topical Teaching",
 		"year": "2026",
 		"teacher": "John Doe",
@@ -209,7 +273,7 @@ returned with `url: null`. Invalid teaching ids return
 ```
 
 `POST /v1/teachings` creates a teaching with `title`, `passage`, `chapters`, `category`,
-`year`, `teacher` and `event` as required fields. At least one of `audio_file_id` or
+`year`, `teacher` and `event` as required fields; `verses` is optional and defaults to `null`. At least one of `audio_file_id` or
 `video_url` must be provided. `audio_file_id`, `pdf_file_id` and `ppt_file_id` reference
 previously uploaded library files and default to `null`. `category` accepts `New Testament`,
 `Old Testament`, `Topical Teaching` or `Workshop`. The server generates `id`, derives
@@ -219,8 +283,9 @@ cannot set those fields.
 ```json
 {
 	"title": "Living by Faith",
-	"passage": "Romans 1:16-17",
+	"passage": "Romans",
 	"chapters": "1",
+	"verses": "16-17",
 	"category": "New Testament",
 	"year": "2026",
 	"teacher": "John Doe",
@@ -259,8 +324,9 @@ unchanged, or send `null` to remove it:
 ```json
 {
 	"title": "Living by Faith — Revised",
-	"passage": "Romans 1:16-17",
+	"passage": "Romans",
 	"chapters": "1",
+	"verses": "16-17",
 	"category": "New Testament",
 	"year": "2026",
 	"teacher": "John Doe",
@@ -307,7 +373,11 @@ cross-system recovery becomes a requirement.
 ## Classes
 
 `GET /v1/classes` returns class summaries ordered by newest creation time and id. `page`
-defaults to `1`; `limit` defaults to `10` and accepts values from `1` through `50`.
+defaults to `1`; `limit` defaults to `10` and accepts values from `1` through `50`. The
+optional `category` query parameter takes a class category id (positive integer) and returns
+only classes in that category, e.g. `GET /v1/classes?category=3&page=1`. The optional `q`
+keyword search splits on whitespace (up to 10 words); every word must appear in the class
+title or the category label, e.g. `GET /v1/classes?q=faith%20discipleship`.
 
 ```json
 {
@@ -487,8 +557,13 @@ Success returns `201 Created`:
 ```
 
 `PUT /v1/class/:classId/materials/:materialId` completely replaces the editable material
+<<<<<<< HEAD
+fields and its file links. All fields must be present; use `null` for a material without a
+=======
 fields and its file. All fields must be present; use `null` for a material without a
-week:
+
+> > > > > > > e7b43d30bea02b031e4c8ed096d1fafab25d340a
+> > > > > > > week:
 
 ```json
 {
@@ -508,7 +583,9 @@ explicitly through `DELETE /v1/files` when it is no longer needed.
 
 `GET /v1/ebooks` returns ebook summaries ordered by newest creation time and id. Tags are
 resolved from `ebook_tag_links` and `ebook_tags`. `page` defaults to `1`; `limit` defaults
-to `10` and accepts values from `1` through `50`.
+to `10` and accepts values from `1` through `50`. The optional `q` keyword search splits on
+whitespace (up to 10 words); every word must appear in the ebook title, author, or one of
+its tag labels, e.g. `GET /v1/ebooks?q=grace%20devotional`.
 
 ```json
 {
@@ -779,6 +856,16 @@ ALTER TABLE `library_files` DROP COLUMN `deleted_at`;
 This schema change is destructive. Back up the database or verify a rollback plan first, and
 do not run it while an older application instance that still queries `deleted_at` is active.
 
+Class materials no longer have a description. After deploying code that no longer reads or
+writes it, drop the column:
+
+```sql
+ALTER TABLE `class_materials` DROP COLUMN `description`;
+```
+
+This is destructive in the same way: back up first and do not run it while an older
+instance that still selects `description` is active.
+
 `library_users.tokens_valid_from` is required and is **not** created automatically:
 
 ```sql
@@ -789,6 +876,14 @@ ALTER TABLE `library_users`
 
 Existing rows get the `ALTER` timestamp, which invalidates every token issued before the
 migration ran — one forced re-login.
+
+`users.id` is a UUID v4 generated by the app on register (MariaDB 10.11's `UUID()` is v1):
+
+```sql
+ALTER TABLE `users`
+  MODIFY `id` char(36) NOT NULL,
+  ADD PRIMARY KEY (`id`);
+```
 
 Refresh-token rotation requires the session table below. Create it before deploying the
 refresh-enabled application code because `synchronize` is disabled:

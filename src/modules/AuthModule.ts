@@ -9,12 +9,18 @@ import { RolesGuard } from "../commons/RolesGuard";
 import { AuthController } from "../controllers/AuthController";
 import { AuthSessionEntity } from "../entities/AuthSessionEntity";
 import { LibraryUserEntity } from "../entities/LibraryUserEntity";
+import { MobileUserEntity } from "../entities/MobileUserEntity";
 import { AuthService } from "../services/AuthService";
+import { MobileAuthService } from "../services/MobileAuthService";
 import { PasswordHasher } from "../utilities/PasswordHasher";
 @Global()
 @Module({
 	imports: [
-		TypeOrmModule.forFeature([LibraryUserEntity, AuthSessionEntity]),
+		TypeOrmModule.forFeature([
+			LibraryUserEntity,
+			AuthSessionEntity,
+			MobileUserEntity
+		]),
 		JwtModule.registerAsync({
 			inject: [ConfigService],
 			useFactory: (config: ConfigService): JwtModuleOptions => {
@@ -36,6 +42,7 @@ import { PasswordHasher } from "../utilities/PasswordHasher";
 	controllers: [AuthController],
 	providers: [
 		AuthService,
+		MobileAuthService,
 		PasswordHasher,
 		RolesGuard,
 		{ provide: APP_GUARD, useClass: JwtAuthGuard }

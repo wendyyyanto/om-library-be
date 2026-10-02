@@ -11,16 +11,17 @@ import {
 	Query
 } from "@nestjs/common";
 import { CurrentUser } from "../commons/CurrentUser";
+import { Public } from "../commons/Public";
 import {
 	CreateEbookDto,
 	CreateEbookResponse,
 	EbookDetailResponse,
 	EbooksListResponse,
 	GetEbookParamsDto,
+	GetEbooksQueryDto,
 	UpdateEbookDto,
 	UpdateEbookResponse
 } from "../dtos/EbookDto";
-import { GetPaginationQueryDto } from "../dtos/PaginationDto";
 import { EbookService } from "../services/EbookService";
 
 @Controller()
@@ -36,14 +37,16 @@ export class EbookController {
 		return this.ebookService.create(userId, dto);
 	}
 
+	@Public()
 	@Get("ebooks")
 	@HttpCode(HttpStatus.OK)
 	async list(
-		@Query() query: GetPaginationQueryDto
+		@Query() query: GetEbooksQueryDto
 	): Promise<EbooksListResponse> {
 		return this.ebookService.list(query);
 	}
 
+	@Public()
 	@Get("ebook/:id")
 	@HttpCode(HttpStatus.OK)
 	async getById(

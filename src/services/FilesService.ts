@@ -22,6 +22,7 @@ import { FileUploadResponse } from "../dtos/FileDto";
 import { ClassMaterialEntity } from "../entities/ClassMaterialEntity";
 import { EbookEntity } from "../entities/EbookEntity";
 import { LibraryFileEntity } from "../entities/LibraryFileEntity";
+import { NotificationEntity } from "../entities/NotificationEntity";
 import { TeachingEntity } from "../entities/TeachingEntity";
 import { TransactionRunner } from "../utilities/TransactionRunner";
 
@@ -302,6 +303,11 @@ export class FilesService {
 			)
 			.getExists();
 		if (teachingReference) return true;
+
+		const notificationReference = await manager
+			.getRepository(NotificationEntity)
+			.existsBy({ thumbnailFileId: fileId });
+		if (notificationReference) return true;
 
 		const ebookReference = await manager
 			.getRepository(EbookEntity)

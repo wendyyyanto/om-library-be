@@ -40,7 +40,12 @@ export class ClassMaterialEntity {
 	@Column({ type: "varchar", length: 255 })
 	title: string;
 
-	@Column({ name: "week_number", type: "int", unsigned: true, nullable: true })
+	@Column({
+		name: "week_number",
+		type: "int",
+		unsigned: true,
+		nullable: true
+	})
 	weekNumber: number | null;
 
 	@Column({
