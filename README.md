@@ -38,6 +38,7 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `GET`    | `/v1/notifications/:id` | public | Notification detail.                                         |
 | `POST`   | `/v1/notifications`     | admin  | Save a notification and push it to its OneSignal segment.    |
 | `DELETE` | `/v1/notifications/:id` | admin  | Delete a notification and its thumbnail if unreferenced.     |
+| `DELETE` | `/v1/users/:id`         | admin  | `204`. Soft-deletes a mobile user by setting `deleted_at`.   |
 
 ## Environment
 
@@ -883,6 +884,31 @@ migration ran — one forced re-login.
 ALTER TABLE `users`
   MODIFY `id` char(36) NOT NULL,
   ADD PRIMARY KEY (`id`);
+```
+
+`users` needs audit timestamps and the soft-delete column. The app writes `created_at` /
+`updated_at` itself; the defaults backfill existing rows with the `ALTER` time:
+
+```sql
+ALTER TABLE `users`
+  ADD COLUMN `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  ADD COLUMN `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  ADD COLUMN `deleted_at` timestamp NULL DEFAULT NULL;
+```
+
+Soft-deleted users can no longer log in or verify a link, drop out of `GET /v1/users`, and
+keep their email reserved.
+
+`users.joined_at` records the day an admin approved the account (`PUT /v1/user-approval/:id`
+with `is_approved: 1`). It stays `NULL` while pending and is cleared if the account is set
+back to pending:
+
+```sql
+ALTER TABLE `users`
+  ADD COLUMN `joined_at` date NULL DEFAULT NULL AFTER `token`;
+
+-- Optional backfill: the real approval date is unknown, so use created_at.
+UPDATE `users` SET `joined_at` = DATE(`created_at`) WHERE `approval_status` = 1;
 ```
 
 Refresh-token rotation requires the session table below. Create it before deploying the

@@ -1,4 +1,11 @@
-import { Column, Entity, PrimaryColumn } from "typeorm";
+import {
+	Column,
+	CreateDateColumn,
+	DeleteDateColumn,
+	Entity,
+	PrimaryColumn,
+	UpdateDateColumn
+} from "typeorm";
 
 export enum MobileApprovalStatus {
 	Pending = 0,
@@ -25,4 +32,18 @@ export class MobileUserEntity {
 	/** The JWT from the last login link; a link is only valid while it matches this. */
 	@Column({ type: "text", nullable: true })
 	token: string | null;
+
+	/** Day an admin approved the account (`YYYY-MM-DD`); null while pending or rejected. */
+	@Column({ name: "joined_at", type: "date", nullable: true })
+	joinedAt: string | null;
+
+	@CreateDateColumn({ name: "created_at", type: "timestamp" })
+	createdAt: Date;
+
+	@UpdateDateColumn({ name: "updated_at", type: "timestamp" })
+	updatedAt: Date;
+
+	/** Soft delete: TypeORM's find/exists skip rows where this is set. */
+	@DeleteDateColumn({ name: "deleted_at", type: "timestamp", nullable: true })
+	deletedAt: Date | null;
 }
