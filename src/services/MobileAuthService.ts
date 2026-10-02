@@ -117,6 +117,16 @@ export class MobileAuthService {
 		return { message: "Link has been sent to your email" };
 	}
 
+	/** `isApproved` is 0 or 1 (validated by the DTO), mapping to Pending / Approved. */
+	async setApproval(
+		id: string,
+		isApproved: number
+	): Promise<{ id: string; approval_status: number }> {
+		const { affected } = await this.users.update({ id }, { approvalStatus: isApproved });
+		if (!affected) throw new NotFoundException({ message: "User not found" });
+		return { id, approval_status: isApproved };
+	}
+
 	async verify(token: string): Promise<MobileVerifyResult> {
 		try {
 			await this.jwt.verifyAsync(token);
