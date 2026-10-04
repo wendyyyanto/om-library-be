@@ -1,14 +1,6 @@
-import {
-	Body,
-	Controller,
-	Delete,
-	HttpCode,
-	HttpStatus,
-	Post
-} from "@nestjs/common";
+import { Body, Controller, HttpCode, HttpStatus, Post } from "@nestjs/common";
 import {
 	DropdownOptionsCreateDto,
-	DropdownOptionsDeleteDto,
 	DropdownRequestDto,
 	DropdownResponse,
 	PaginatedDropdownResponse
@@ -33,13 +25,5 @@ export class DropdownController {
 		@Body() dto: DropdownOptionsCreateDto
 	): Promise<DropdownResponse> {
 		return this.dropdownService.createOptions(dto);
-	}
-
-	@Delete("dropdown-options")
-	@HttpCode(HttpStatus.OK)
-	async deleteOptions(
-		@Body() dto: DropdownOptionsDeleteDto
-	): Promise<DropdownResponse> {
-		return this.dropdownService.deleteOptions(dto);
 	}
 }
