@@ -111,6 +111,43 @@ export class DropdownRequestDto {
 	limit?: number;
 }
 
+export class DropdownOptionsCreateDto {
+	@Transform(({ value }) => trim(value))
+	@IsString({ message: "Entity must be text!" })
+	@IsNotEmpty({ message: "Entity is required!" })
+	@MaxLength(64, { message: "Entity must be at most 64 characters!" })
+	entity: string;
+
+	@Transform(({ value }) => trimArray(value))
+	@IsArray({ message: "Options must be an array!" })
+	@ArrayMinSize(1, { message: "At least one option is required!" })
+	@ArrayMaxSize(100, { message: "At most 100 options are allowed!" })
+	@ArrayUnique({ message: "Options must not contain duplicates!" })
+	@IsString({ each: true, message: "Every option must be text!" })
+	@IsNotEmpty({ each: true, message: "Options must not be empty!" })
+	@MaxLength(64, {
+		each: true,
+		message: "Options must be at most 64 characters!"
+	})
+	options: string[];
+}
+
+export class DropdownOptionsDeleteDto {
+	@Transform(({ value }) => trim(value))
+	@IsString({ message: "Entity must be text!" })
+	@IsNotEmpty({ message: "Entity is required!" })
+	@MaxLength(64, { message: "Entity must be at most 64 characters!" })
+	entity: string;
+
+	@IsArray({ message: "Options must be an array!" })
+	@ArrayMinSize(1, { message: "At least one option is required!" })
+	@ArrayMaxSize(100, { message: "At most 100 options are allowed!" })
+	@ArrayUnique({ message: "Options must not contain duplicates!" })
+	@IsInt({ each: true, message: "Every option must be a positive integer id!" })
+	@Min(1, { each: true, message: "Every option must be a positive integer id!" })
+	options: number[];
+}
+
 export type DropdownValue = string | number | boolean | null;
 
 export interface DropdownOption {
