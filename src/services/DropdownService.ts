@@ -11,7 +11,6 @@ import {
 	DropdownFilterDto,
 	DropdownOption,
 	DropdownOptionsCreateDto,
-	DropdownOptionsDeleteDto,
 	DropdownRequestDto,
 	DropdownResponse,
 	PaginatedDropdownResponse
@@ -109,7 +108,16 @@ export class DropdownService {
 	async createOptions(
 		dto: DropdownOptionsCreateDto
 	): Promise<DropdownResponse> {
-		await this.assertOptionTable(dto.entity);
+		const columns = (await this.schema()).get(dto.entity);
+		if (!columns)
+			throw new NotFoundException({
+				statusCode: HttpStatus.NOT_FOUND,
+				code: ERROR_CODES.NOT_FOUND,
+				message: `Dropdown entity "${dto.entity}" does not exist.`
+			});
+		if (!columns.has("id") || !columns.has(OPTION_COLUMN))
+			throw this.invalid(`Dropdown entity "${dto.entity}" does not accept options.`);
+
 		await this.dataSource
 			.createQueryBuilder()
 			.insert()
@@ -117,38 +125,8 @@ export class DropdownService {
 			.values(dto.options.map((option) => ({ [OPTION_COLUMN]: option })))
 			.execute();
 
-		return this.optionList(dto.entity);
-	}
-
-	async deleteOptions(
-		dto: DropdownOptionsDeleteDto
-	): Promise<DropdownResponse> {
-		await this.assertOptionTable(dto.entity);
-		await this.dataSource
-			.createQueryBuilder()
-			.delete()
-			.from(dto.entity)
-			.where("id IN (:...ids)", { ids: dto.options })
-			.execute();
-
-		return this.optionList(dto.entity);
-	}
-
-	private async assertOptionTable(entity: string): Promise<void> {
-		const columns = (await this.schema()).get(entity);
-		if (!columns)
-			throw new NotFoundException({
-				statusCode: HttpStatus.NOT_FOUND,
-				code: ERROR_CODES.NOT_FOUND,
-				message: `Dropdown entity "${entity}" does not exist.`
-			});
-		if (!columns.has("id") || !columns.has(OPTION_COLUMN))
-			throw this.invalid(`Dropdown entity "${entity}" does not accept options.`);
-	}
-
-	private optionList(entity: string): Promise<DropdownResponse> {
 		return this.getOptions({
-			entity,
+			entity: dto.entity,
 			attributes: ["id", OPTION_COLUMN],
 			sort_by: ["id", "asc"]
 		});
