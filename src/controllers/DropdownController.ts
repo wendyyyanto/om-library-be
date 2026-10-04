@@ -1,4 +1,11 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from "@nestjs/common";
+import {
+	Body,
+	Controller,
+	Delete,
+	HttpCode,
+	HttpStatus,
+	Post
+} from "@nestjs/common";
 import {
 	DropdownOptionsCreateDto,
 	DropdownRequestDto,
