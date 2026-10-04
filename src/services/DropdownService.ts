@@ -1,10 +1,17 @@
-import { BadRequestException, HttpStatus, Injectable } from "@nestjs/common";
+import {
+	BadRequestException,
+	HttpStatus,
+	Injectable,
+	NotFoundException
+} from "@nestjs/common";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource, ObjectLiteral, SelectQueryBuilder } from "typeorm";
 import { ERROR_CODES } from "../constants/error-codes";
 import {
 	DropdownFilterDto,
 	DropdownOption,
+	DropdownOptionsCreateDto,
+	DropdownOptionsDeleteDto,
 	DropdownRequestDto,
 	DropdownResponse,
 	PaginatedDropdownResponse
@@ -24,6 +31,10 @@ const SQL_OPERATORS = {
 	lt: "<",
 	lte: "<="
 } as const;
+
+// Option tables (ebook_tags, class_categories) store the text in this column;
+// requiring it also keeps the insert away from every other table.
+const OPTION_COLUMN = "label";
 
 const HIDDEN_COLUMNS = new Set(["password_hash", "token", "refresh_token_hash"]);
 
@@ -93,6 +104,54 @@ export class DropdownService {
 				total_pages: Math.ceil(totalItems / limit)
 			}
 		};
+	}
+
+	async createOptions(
+		dto: DropdownOptionsCreateDto
+	): Promise<DropdownResponse> {
+		await this.assertOptionTable(dto.entity);
+		await this.dataSource
+			.createQueryBuilder()
+			.insert()
+			.into(dto.entity, [OPTION_COLUMN])
+			.values(dto.options.map((option) => ({ [OPTION_COLUMN]: option })))
+			.execute();
+
+		return this.optionList(dto.entity);
+	}
+
+	async deleteOptions(
+		dto: DropdownOptionsDeleteDto
+	): Promise<DropdownResponse> {
+		await this.assertOptionTable(dto.entity);
+		await this.dataSource
+			.createQueryBuilder()
+			.delete()
+			.from(dto.entity)
+			.where("id IN (:...ids)", { ids: dto.options })
+			.execute();
+
+		return this.optionList(dto.entity);
+	}
+
+	private async assertOptionTable(entity: string): Promise<void> {
+		const columns = (await this.schema()).get(entity);
+		if (!columns)
+			throw new NotFoundException({
+				statusCode: HttpStatus.NOT_FOUND,
+				code: ERROR_CODES.NOT_FOUND,
+				message: `Dropdown entity "${entity}" does not exist.`
+			});
+		if (!columns.has("id") || !columns.has(OPTION_COLUMN))
+			throw this.invalid(`Dropdown entity "${entity}" does not accept options.`);
+	}
+
+	private optionList(entity: string): Promise<DropdownResponse> {
+		return this.getOptions({
+			entity,
+			attributes: ["id", OPTION_COLUMN],
+			sort_by: ["id", "asc"]
+		});
 	}
 
 	// Table -> columns of the current database, read once from information_schema.
