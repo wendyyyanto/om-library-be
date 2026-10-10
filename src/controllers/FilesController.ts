@@ -11,9 +11,13 @@ import {
 import { FileInterceptor } from "@nestjs/platform-express";
 import { CurrentUser } from "../commons/CurrentUser";
 import {
+	CompleteUploadDto,
+	CreateUploadUrlDto,
 	DeleteFileDto,
 	FileUploadResponse,
-	UploadFileDto
+	LegacyFileUploadResponse,
+	UploadFileDto,
+	UploadUrlResponse
 } from "../dtos/FileDto";
 import { FilesService } from "../services/FilesService";
 
@@ -28,8 +32,26 @@ export class FilesController {
 		@CurrentUser("id") userId: string,
 		@UploadedFile() file: Express.Multer.File | undefined,
 		@Body() dto: UploadFileDto
-	): Promise<FileUploadResponse> {
+	): Promise<LegacyFileUploadResponse> {
 		return this.filesService.upload(userId, file, dto.path || "files");
+	}
+
+	@Post("upload-url")
+	@HttpCode(HttpStatus.OK)
+	async createUploadUrl(
+		@CurrentUser("id") userId: string,
+		@Body() dto: CreateUploadUrlDto
+	): Promise<UploadUrlResponse> {
+		return this.filesService.createUploadUrl(userId, dto);
+	}
+
+	@Post("complete")
+	@HttpCode(HttpStatus.CREATED)
+	async completeUpload(
+		@CurrentUser("id") userId: string,
+		@Body() dto: CompleteUploadDto
+	): Promise<FileUploadResponse> {
+		return this.filesService.completeUpload(userId, dto.upload_token);
 	}
 
 	@Delete()

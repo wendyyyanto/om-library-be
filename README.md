@@ -32,6 +32,8 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `POST`   | `/v1/teachings`     | bearer | Create a teaching owned by the caller.                           |
 | `PUT`    | `/v1/teachings/:id` | bearer | Replace an owned teaching's complete editable representation.    |
 | `DELETE` | `/v1/teachings/:id` | bearer | Hard-delete an owned teaching and its unshared files.            |
+| `POST`   | `/v1/files/upload-url` | bearer | Presigned R2 PUT URL for a direct browser upload.             |
+| `POST`   | `/v1/files/complete`   | bearer | Register a directly uploaded file; returns its `file_id`.     |
 | `POST`   | `/v1/files`         | bearer | Upload one `multipart/form-data` field named `file` to R2.       |
 | `DELETE` | `/v1/files`         | bearer | Delete the caller's uploaded file using `{ "file_id": "UUID" }`. |
 | `GET`    | `/v1/notifications`     | public | Paginated notification list, latest `event_date` first.      |
@@ -54,7 +56,7 @@ Use `npm run start:dev` for watch mode and `npm run start:prod` after building.
 | `R2_ACCESS_KEY_ID`                                | **yes**  | —                                          |
 | `R2_SECRET_ACCESS_KEY`                            | **yes**  | —                                          |
 | `R2_BUCKET_NAME`                                  | **yes**  | —                                          |
-| `FILE_UPLOAD_MAX_BYTES`                           | no       | `10485760` (10 MiB)                        |
+| `FILE_UPLOAD_MAX_BYTES`                           | no       | `1073741824` (1 GiB)                       |
 | `MOBILE_JWT_SECRET`                               | **yes**  | none — the app refuses to start without it |
 | `MOBILE_JWT_EXPIRES_IN`                           | no       | none — mobile JWTs never expire            |
 | `MOBILE_LOGIN_LINK_URL`                           | no       | `https://mobile.organic-ministry.org/auth` |
@@ -318,8 +320,8 @@ four media fields must also be present, but each may be `null`; server-managed f
 as `id`, `created_at`, `updated_at` and `uploaded_by` are rejected. The resulting teaching
 must still contain at least one of `audio_file_id` or `video_url`.
 
-To replace a teaching file, first upload the new object through `POST /v1/files`, then put
-the returned `fileId` in the complete teaching payload. Keep the current id when a file is
+To replace a teaching file, first upload the new object (see [File uploads](#file-uploads)),
+then put the returned `file_id` in the complete teaching payload. Keep the current id when a file is
 unchanged, or send `null` to remove it:
 
 ```json
@@ -759,12 +761,46 @@ error is logged and the file metadata remains for safe retry.
 
 ## File uploads
 
+### Direct upload (preferred)
+
+The bytes go straight from the client to R2, so file size never touches API memory.
+
+1. `POST /v1/files/upload-url` with `{ "file_name": "cover.jpg", "content_type": "image/jpeg",
+   "size": 123456, "path": "books/covers" }`. `path` defaults to `files`, `content_type` to
+   `application/octet-stream`, and `size` must not exceed `FILE_UPLOAD_MAX_BYTES`. Returns
+   `409 FILE_ALREADY_EXISTS` if the key is already registered.
+
+   ```json
+   {
+   	"upload_url": "https://<account>.r2.cloudflarestorage.com/...",
+   	"headers": { "Content-Type": "image/jpeg", "If-None-Match": "*" },
+   	"upload_token": "eyJ...",
+   	"expires_in": 900
+   }
+   ```
+
+2. `PUT` the raw file body to `upload_url` within `expires_in` seconds, sending exactly the
+   returned `headers`. Size and content type are part of the signature, so a different file
+   is rejected by R2 (`403`). `412` means another upload already took that key.
+
+   ```js
+   await fetch(upload_url, { method: "PUT", headers, body: file });
+   ```
+
+3. `POST /v1/files/complete` with `{ "upload_token": "eyJ..." }`. The API checks the object
+   exists in R2 with the signed size, records it in `library_files` and returns
+   `{ "file_id", "file_name", "size", "content_type" }`. The token is valid for 24 hours and only for the user who
+   requested it; until this call succeeds the object has no `fileId` and can't be referenced.
+
+The R2 bucket needs a CORS rule allowing `PUT` from the frontend origin with the
+`Content-Type` and `If-None-Match` request headers.
+
+### Multipart upload through the API
+
 `POST /v1/files` accepts exactly one in-memory multipart file in the `file` field and an
 optional `path` text field that selects the R2 key prefix. The path defaults to `files`.
-The default 10 MiB limit is deliberately lower than R2's object limit because the API
-buffers the upload before sending it to R2. Raise `FILE_UPLOAD_MAX_BYTES` only with the
-process's available memory and expected concurrency in mind; large or resumable uploads
-should use presigned or multipart uploads instead.
+The API buffers the whole file in memory before sending it to R2, so concurrent large
+uploads can exhaust the process's memory; prefer the direct upload above.
 
 ```bash
 curl -X POST http://localhost:3000/v1/files \

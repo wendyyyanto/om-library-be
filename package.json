@@ -1,6 +1,6 @@
 {
 	"name": "om-library-be",
-	"version": "1.9.0",
+	"version": "1.9.1",
 	"description": "Organic Ministry library API — accounts, profiles, and book lending.",
 	"main": "dist/main",
 	"scripts": {
@@ -16,6 +16,7 @@
 	"type": "commonjs",
 	"dependencies": {
 		"@aws-sdk/client-s3": "^3.1117.0",
+		"@aws-sdk/s3-request-presigner": "^3.1127.0",
 		"@nestjs/common": "^11.1.6",
 		"@nestjs/config": "^4.0.2",
 		"@nestjs/core": "^11.1.6",
