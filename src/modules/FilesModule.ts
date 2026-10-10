@@ -5,9 +5,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { FilesController } from "../controllers/FilesController";
 import { LibraryFileEntity } from "../entities/LibraryFileEntity";
 import { TeachingEntity } from "../entities/TeachingEntity";
-import { FilesService } from "../services/FilesService";
-
-const DEFAULT_FILE_UPLOAD_MAX_BYTES = 1024 * 1024 * 1024;
+import { FilesService, fileUploadMaxBytes } from "../services/FilesService";
 
 @Module({
 	imports: [
@@ -27,15 +25,3 @@ const DEFAULT_FILE_UPLOAD_MAX_BYTES = 1024 * 1024 * 1024;
 	exports: [FilesService]
 })
 export class FilesModule {}
-
-function fileUploadMaxBytes(config: ConfigService): number {
-	const raw = config.get<string>("FILE_UPLOAD_MAX_BYTES");
-	if (raw === undefined) return DEFAULT_FILE_UPLOAD_MAX_BYTES;
-
-	const value = Number(raw);
-	if (!Number.isSafeInteger(value) || value <= 0)
-		throw new Error(
-			"FILE_UPLOAD_MAX_BYTES must be a positive whole number of bytes"
-		);
-	return value;
-}

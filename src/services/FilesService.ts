@@ -11,14 +11,22 @@ import {
 import { ConfigService } from "@nestjs/config";
 import {
 	DeleteObjectCommand,
+	HeadObjectCommand,
 	PutObjectCommand,
 	S3Client
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
 import { randomUUID } from "node:crypto";
 import { EntityManager, Repository } from "typeorm";
 import { ERROR_CODES } from "../constants/error-codes";
-import { FileUploadResponse } from "../dtos/FileDto";
+import {
+	CreateUploadUrlDto,
+	FileUploadResponse,
+	LegacyFileUploadResponse,
+	UploadUrlResponse
+} from "../dtos/FileDto";
 import { ClassMaterialEntity } from "../entities/ClassMaterialEntity";
 import { EbookEntity } from "../entities/EbookEntity";
 import { LibraryFileEntity } from "../entities/LibraryFileEntity";
@@ -26,19 +34,48 @@ import { NotificationEntity } from "../entities/NotificationEntity";
 import { TeachingEntity } from "../entities/TeachingEntity";
 import { TransactionRunner } from "../utilities/TransactionRunner";
 
+const DEFAULT_FILE_UPLOAD_MAX_BYTES = 1024 * 1024 * 1024;
+const UPLOAD_URL_TTL_SECONDS = 15 * 60;
+const UPLOAD_TOKEN_TTL = "24h";
+const UPLOAD_TOKEN_PURPOSE = "file-upload";
+
+/** Signed with JWT_SECRET but has no `sub`/`role`/`sid`, so JwtAuthGuard rejects it as a bearer token. */
+interface UploadTokenPayload {
+	purpose: typeof UPLOAD_TOKEN_PURPOSE;
+	uid: string;
+	key: string;
+	fileName: string;
+	contentType: string;
+	size: number;
+}
+
+export function fileUploadMaxBytes(config: ConfigService): number {
+	const raw = config.get<string>("FILE_UPLOAD_MAX_BYTES");
+	if (raw === undefined) return DEFAULT_FILE_UPLOAD_MAX_BYTES;
+
+	const value = Number(raw);
+	if (!Number.isSafeInteger(value) || value <= 0)
+		throw new Error(
+			"FILE_UPLOAD_MAX_BYTES must be a positive whole number of bytes"
+		);
+	return value;
+}
+
 @Injectable()
 export class FilesService {
 	private static readonly ASSET_BASE_URL =
 		"https://assets.organic-ministry.org";
 	private readonly logger = new Logger(FilesService.name);
 	private readonly bucket: string;
+	private readonly maxBytes: number;
 	private readonly r2: S3Client;
 
 	constructor(
 		config: ConfigService,
 		@InjectRepository(LibraryFileEntity)
 		private readonly files: Repository<LibraryFileEntity>,
-		private readonly transactions: TransactionRunner
+		private readonly transactions: TransactionRunner,
+		private readonly jwt: JwtService
 	) {
 		const accountId = this.requiredConfig(config, "CLOUDFLARE_ACCOUNT_ID");
 		const accessKeyId = this.requiredConfig(config, "R2_ACCESS_KEY_ID");
@@ -47,11 +84,14 @@ export class FilesService {
 			"R2_SECRET_ACCESS_KEY"
 		);
 		this.bucket = this.requiredConfig(config, "R2_BUCKET_NAME");
+		this.maxBytes = fileUploadMaxBytes(config);
 
 		this.r2 = new S3Client({
 			region: "auto",
 			endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-			credentials: { accessKeyId, secretAccessKey }
+			credentials: { accessKeyId, secretAccessKey },
+			// The default CRC32 checksum would be baked into presigned URLs for an empty body.
+			requestChecksumCalculation: "WHEN_REQUIRED"
 		});
 	}
 
@@ -59,7 +99,7 @@ export class FilesService {
 		userId: string,
 		file: Express.Multer.File | undefined,
 		path: string
-	): Promise<FileUploadResponse> {
+	): Promise<LegacyFileUploadResponse> {
 		if (!file)
 			throw this.invalidFile("A file is required in the 'file' field.");
 		if (!file.size)
@@ -94,17 +134,12 @@ export class FilesService {
 		}
 
 		try {
-			await this.files.save(
-				this.files.create({
-					id: fileId,
-					uploadedBy: userId,
-					storageKey: key,
-					fileName: file.originalname,
-					url: this.assetUrl(key),
-					contentType,
-					sizeBytes: file.size
-				})
-			);
+			await this.recordFile(fileId, userId, {
+				key,
+				fileName: file.originalname,
+				contentType,
+				size: file.size
+			});
 		} catch (error) {
 			await this.removeOrphanedUpload(key, fileId);
 			throw error;
@@ -115,6 +150,93 @@ export class FilesService {
 			fileName: file.originalname,
 			size: file.size,
 			contentType
+		};
+	}
+
+	/** Step 1 of a direct upload: the client PUTs the bytes to `upload_url`, then calls {@link completeUpload}. */
+	async createUploadUrl(
+		userId: string,
+		dto: CreateUploadUrlDto
+	): Promise<UploadUrlResponse> {
+		if (dto.size > this.maxBytes)
+			throw this.invalidFile(`File must be at most ${this.maxBytes} bytes.`);
+
+		const key = this.storageKey(dto.path || "files", dto.file_name);
+		const contentType = dto.content_type || "application/octet-stream";
+		if (await this.files.existsBy({ storageKey: key }))
+			throw this.fileAlreadyExists();
+
+		// Content-Length and Content-Type are signed, so R2 rejects a PUT with any other size or type.
+		const uploadUrl = await getSignedUrl(
+			this.r2,
+			new PutObjectCommand({
+				Bucket: this.bucket,
+				Key: key,
+				ContentLength: dto.size,
+				ContentType: contentType,
+				IfNoneMatch: "*"
+			}),
+			{
+				expiresIn: UPLOAD_URL_TTL_SECONDS,
+				signableHeaders: new Set(["content-type"])
+			}
+		);
+		const payload: UploadTokenPayload = {
+			purpose: UPLOAD_TOKEN_PURPOSE,
+			uid: userId,
+			key,
+			fileName: dto.file_name,
+			contentType,
+			size: dto.size
+		};
+		const uploadToken = await this.jwt.signAsync(payload, {
+			expiresIn: UPLOAD_TOKEN_TTL
+		});
+
+		return {
+			upload_url: uploadUrl,
+			headers: { "Content-Type": contentType, "If-None-Match": "*" },
+			upload_token: uploadToken,
+			expires_in: UPLOAD_URL_TTL_SECONDS
+		};
+	}
+
+	/** Step 2 of a direct upload: confirms the object landed in R2 and registers it. */
+	async completeUpload(
+		userId: string,
+		uploadToken: string
+	): Promise<FileUploadResponse> {
+		const upload = await this.verifyUploadToken(userId, uploadToken);
+		if (await this.files.existsBy({ storageKey: upload.key }))
+			throw this.fileAlreadyExists();
+
+		let size: number | undefined;
+		try {
+			const head = await this.r2.send(
+				new HeadObjectCommand({ Bucket: this.bucket, Key: upload.key })
+			);
+			size = head.ContentLength;
+		} catch (error) {
+			if (this.hasStatus(error, HttpStatus.NOT_FOUND))
+				throw this.invalidFile("The file has not been uploaded yet.");
+			this.logger.error(`R2 head failed (${this.errorName(error)}).`);
+			throw new BadGatewayException({
+				statusCode: HttpStatus.BAD_GATEWAY,
+				code: ERROR_CODES.FILE_UPLOAD_FAILED,
+				message: "The upload could not be verified. Please try again."
+			});
+		}
+		if (size !== upload.size)
+			throw this.invalidFile("The uploaded file does not match the requested size.");
+
+		// No R2 cleanup on failure: the object is the caller's and a retry can still register it.
+		const fileId = randomUUID();
+		await this.recordFile(fileId, userId, upload);
+		return {
+			file_id: fileId,
+			file_name: upload.fileName,
+			size: upload.size,
+			content_type: upload.contentType
 		};
 	}
 
@@ -190,6 +312,40 @@ export class FilesService {
 				message
 			});
 		}
+	}
+
+	private async recordFile(
+		fileId: string,
+		userId: string,
+		file: { key: string; fileName: string; contentType: string; size: number }
+	): Promise<void> {
+		await this.files.save(
+			this.files.create({
+				id: fileId,
+				uploadedBy: userId,
+				storageKey: file.key,
+				fileName: file.fileName,
+				url: this.assetUrl(file.key),
+				contentType: file.contentType,
+				sizeBytes: file.size
+			})
+		);
+	}
+
+	private async verifyUploadToken(
+		userId: string,
+		token: string
+	): Promise<UploadTokenPayload> {
+		const invalid = this.invalidFile("Upload token is invalid or expired.");
+		let payload: UploadTokenPayload;
+		try {
+			payload = await this.jwt.verifyAsync<UploadTokenPayload>(token);
+		} catch {
+			throw invalid;
+		}
+		if (payload.purpose !== UPLOAD_TOKEN_PURPOSE || payload.uid !== userId)
+			throw invalid;
+		return payload;
 	}
 
 	private requiredConfig(config: ConfigService, name: string): string {
@@ -344,14 +500,17 @@ export class FilesService {
 	}
 
 	private isPreconditionFailed(error: unknown): boolean {
-		if (typeof error !== "object" || error === null) return false;
-		const r2Error = error as {
-			name?: string;
-			$metadata?: { httpStatusCode?: number };
-		};
 		return (
-			r2Error.name === "PreconditionFailed" ||
-			r2Error.$metadata?.httpStatusCode === HttpStatus.PRECONDITION_FAILED
+			(error as { name?: string } | null)?.name === "PreconditionFailed" ||
+			this.hasStatus(error, HttpStatus.PRECONDITION_FAILED)
+		);
+	}
+
+	private hasStatus(error: unknown, status: number): boolean {
+		if (typeof error !== "object" || error === null) return false;
+		return (
+			(error as { $metadata?: { httpStatusCode?: number } }).$metadata
+				?.httpStatusCode === status
 		);
 	}
 }
