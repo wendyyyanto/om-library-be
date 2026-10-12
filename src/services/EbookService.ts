@@ -160,12 +160,15 @@ export class EbookService {
 			);
 		});
 
-		const [ebooks, totalItems] = await builder
+		builder
 			.orderBy("ebook.createdAt", "DESC")
 			.addOrderBy("ebook.id", "DESC")
-			.skip((page - 1) * limit)
-			.take(limit)
-			.getManyAndCount();
+			.offset((page - 1) * limit)
+			.limit(limit);
+		const [ebooks, totalItems] = await Promise.all([
+			builder.getMany(),
+			builder.clone().getCount()
+		]);
 
 		const tagsByEbook = await this.getTagsByEbook(
 			ebooks.map((ebook) => ebook.id)

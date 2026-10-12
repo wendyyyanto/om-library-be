@@ -111,12 +111,15 @@ export class NotificationService {
 				q: `%${escapeLike(query.q)}%`
 			});
 
-		const [rows, totalItems] = await builder
+		builder
 			.orderBy("notification.eventDate", "DESC")
 			.addOrderBy("notification.id", "DESC")
-			.skip((page - 1) * limit)
-			.take(limit)
-			.getManyAndCount();
+			.offset((page - 1) * limit)
+			.limit(limit);
+		const [rows, totalItems] = await Promise.all([
+			builder.getMany(),
+			builder.clone().getCount()
+		]);
 
 		return {
 			data: rows.map((row) => this.toResponse(row)),

@@ -139,12 +139,15 @@ export class ClassService {
 			);
 		});
 
-		const [classes, totalItems] = await builder
+		builder
 			.orderBy("classRecord.createdAt", "DESC")
 			.addOrderBy("classRecord.id", "DESC")
-			.skip((page - 1) * limit)
-			.take(limit)
-			.getManyAndCount();
+			.offset((page - 1) * limit)
+			.limit(limit);
+		const [classes, totalItems] = await Promise.all([
+			builder.getMany(),
+			builder.clone().getCount()
+		]);
 
 		return {
 			data: classes.map((classRecord) =>
