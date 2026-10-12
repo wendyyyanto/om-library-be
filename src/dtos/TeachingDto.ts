@@ -341,6 +341,7 @@ export interface TeachingListItemResponse {
 	verses: string | null;
 	category: TeachingCategory;
 	teacher: string;
+	event: string;
 	date: string;
 	thumbnail_url: string | null;
 	uploaded_by: TeachingUploaderResponse;

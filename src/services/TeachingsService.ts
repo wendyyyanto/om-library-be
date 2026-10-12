@@ -106,6 +106,7 @@ export class TeachingsService {
 				"teaching.verses",
 				"teaching.category",
 				"teaching.teacher",
+				"teaching.event",
 				"teaching.createdAt",
 				"uploader.id",
 				"uploader.name",
@@ -472,6 +473,7 @@ export class TeachingsService {
 			verses: teaching.verses,
 			category: teaching.category,
 			teacher: teaching.teacher,
+			event: teaching.event,
 			date: teaching.createdAt.toISOString(),
 			thumbnail_url: teaching.thumbnail?.thumbnailUrl ?? null,
 			uploaded_by: {

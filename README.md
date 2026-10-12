@@ -184,6 +184,7 @@ fields used by the list view and returns snake-case response keys:
 			"verses": "1-6",
 			"category": "Topical Teaching",
 			"teacher": "John Doe",
+			"event": "Sunday Service",
 			"date": "2026-08-17T00:00:00.000Z",
 			"uploaded_by": {
 				"id": "66e76a86-9507-4b52-a2d6-f9bd7d58a68a",
