@@ -182,12 +182,15 @@ export class TeachingsService {
 			);
 		});
 
-		const [teachings, totalItems] = await builder
+		builder
 			.orderBy("teaching.createdAt", "DESC")
 			.addOrderBy("teaching.id", "DESC")
-			.skip((page - 1) * limit)
-			.take(limit)
-			.getManyAndCount();
+			.offset((page - 1) * limit)
+			.limit(limit);
+		const [teachings, totalItems] = await Promise.all([
+			builder.getMany(),
+			builder.clone().getCount()
+		]);
 
 		return {
 			data: teachings.map((teaching) => this.toResponse(teaching)),
