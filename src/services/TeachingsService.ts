@@ -343,7 +343,17 @@ export class TeachingsService {
 			);
 		});
 
-		for (const fileId of detachedFileIds) {
+		void this.cleanupDetachedFiles(userId, id, detachedFileIds);
+
+		return this.getById(id);
+	}
+
+	private async cleanupDetachedFiles(
+		userId: string,
+		id: string,
+		fileIds: string[]
+	): Promise<void> {
+		for (const fileId of fileIds) {
 			try {
 				await this.filesService.deleteIfUnreferenced(userId, fileId);
 			} catch (error) {
@@ -352,8 +362,6 @@ export class TeachingsService {
 				);
 			}
 		}
-
-		return this.getById(id);
 	}
 
 	async delete(userId: string, id: string): Promise<void> {

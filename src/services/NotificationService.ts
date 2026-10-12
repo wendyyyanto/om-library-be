@@ -149,17 +149,15 @@ export class NotificationService {
 
 		await this.notifications.delete({ id });
 
-		if (!notification.thumbnailFileId) return;
-		try {
-			await this.filesService.deleteIfUnreferenced(
-				userId,
-				notification.thumbnailFileId
+		const thumbnailFileId = notification.thumbnailFileId;
+		if (!thumbnailFileId) return;
+		void this.filesService
+			.deleteIfUnreferenced(userId, thumbnailFileId)
+			.catch((error: unknown) =>
+				this.logger.error(
+					`Notification ${id} was deleted, but thumbnail ${thumbnailFileId} needs cleanup (${this.errorName(error)}).`
+				)
 			);
-		} catch (error) {
-			this.logger.error(
-				`Notification ${id} was deleted, but thumbnail ${notification.thumbnailFileId} needs cleanup (${this.errorName(error)}).`
-			);
-		}
 	}
 
 	/** Returns the OneSignal notification id, or null when nothing was sent. Never throws. */

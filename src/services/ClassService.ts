@@ -296,7 +296,7 @@ export class ClassService {
 			return [...new Set(materials.map((material) => material.fileId))];
 		});
 
-		await this.cleanupDetachedFiles(userId, fileIds, `Class ${id}`);
+		void this.cleanupDetachedFiles(userId, fileIds, `Class ${id}`);
 	}
 
 	async createMaterial(

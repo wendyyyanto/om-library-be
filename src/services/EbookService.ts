@@ -305,7 +305,7 @@ export class EbookService {
 			];
 		});
 
-		await this.cleanupDetachedFiles(userId, fileIds, `Ebook ${id}`);
+		void this.cleanupDetachedFiles(userId, fileIds, `Ebook ${id}`);
 	}
 
 	private async getDetailData(id: string): Promise<CreatedEbookResponse> {
