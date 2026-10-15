@@ -6,6 +6,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import type * as jwt from "jsonwebtoken";
 import { JwtAuthGuard } from "../commons/JwtAuthGuard";
 import { RolesGuard } from "../commons/RolesGuard";
+import { AccountDeletionController } from "../controllers/AccountDeletionController";
 import { AuthController } from "../controllers/AuthController";
 import { UserApprovalController } from "../controllers/UserApprovalController";
 import { UsersController } from "../controllers/UsersController";
@@ -41,7 +42,12 @@ import { PasswordHasher } from "../utilities/PasswordHasher";
 			}
 		})
 	],
-	controllers: [AuthController, UserApprovalController, UsersController],
+	controllers: [
+		AuthController,
+		UserApprovalController,
+		UsersController,
+		AccountDeletionController
+	],
 	providers: [
 		AuthService,
 		MobileAuthService,
