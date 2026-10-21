@@ -78,7 +78,9 @@ export class MobileAuthService {
 				id: randomUUID(),
 				name,
 				email,
-				approvalStatus: MobileApprovalStatus.Pending,
+				// ponytail: admin approval temporarily off, auto-approve until it returns.
+				approvalStatus: MobileApprovalStatus.Approved,
+				joinedAt: () => "CURRENT_DATE",
 				createdAt: now,
 				updatedAt: now
 			});
@@ -92,7 +94,7 @@ export class MobileAuthService {
 		}
 
 		return {
-			message: "Registration success, waiting for admin approval before you can log in"
+			message: "Registration success, your account is ready to log in"
 		};
 	}
 
